@@ -1,0 +1,22 @@
+import { Router } from 'express';
+import { authenticate } from '../middleware/auth';
+import {
+  listNotifications,
+  markRead,
+  markAllRead,
+  getVapidPublicKey,
+  subscribePush,
+  unsubscribePush,
+} from '../controllers/notification.controller';
+
+const router = Router();
+
+router.get('/', authenticate, listNotifications);
+router.patch('/:id/read', authenticate, markRead);
+router.post('/read-all', authenticate, markAllRead);
+
+router.get('/vapid-key', authenticate, getVapidPublicKey);
+router.post('/subscribe', authenticate, subscribePush);
+router.post('/unsubscribe', authenticate, unsubscribePush);
+
+export default router;

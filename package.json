@@ -1,0 +1,20 @@
+{
+  "name": "nexus-monorepo",
+  "version": "1.0.0",
+  "description": "Nexus — Centralized Progressive Web App for Tech Hub Resource Sharing, Project Management, and Collaboration",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev:all",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "dev:all": "npx concurrently -k -n \"SERVER,CLIENT\" -c \"cyan,magenta\" \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build:client": "npm --prefix client run build",
+    "build:server": "npm --prefix server run build",
+    "prisma:push": "npm --prefix server run prisma:push",
+    "prisma:seed": "npm --prefix server run prisma:seed",
+    "prisma:studio": "npx --prefix server prisma studio"
+  },
+  "keywords": ["nexus", "tech-hub", "pwa", "hackathon", "project-management"],
+  "author": "",
+  "license": "MIT"
+}

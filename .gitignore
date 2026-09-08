@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment variables
+.env
+.env*.local
+server/.env
+
+# Build outputs
+dist/
+build/
+client/dist/
+server/dist/
+
+# Database files
+*.db
+*.db-journal
+dev.db
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/dev.db
+server/dev.db-journal
+
+# Uploads
+uploads/
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
