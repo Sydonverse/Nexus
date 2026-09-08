@@ -156,6 +156,24 @@ export const App: React.FC = () => {
     loadAvailableDepartments();
   }, [loadMe, loadAvailableDepartments]);
 
+  // Auto-select department for Admin or if departments list becomes available
+  useEffect(() => {
+    if (user?.role === 'ADMIN' && (!activeDept || userDepartments.length === 0) && availableDepartments.length > 0) {
+      const adminDepts: DepartmentMemberContext[] = availableDepartments.map((d) => ({
+        id: d.id,
+        name: d.name,
+        slug: d.slug,
+        colorHex: d.colorHex,
+        icon: d.icon,
+        memberRole: 'ADMIN',
+      }));
+      setUserDepartments(adminDepts);
+      if (!activeDept) {
+        setActiveDept(adminDepts[0]);
+      }
+    }
+  }, [user, activeDept, userDepartments.length, availableDepartments]);
+
   // 4. WebSocket connection lifecycle
   useEffect(() => {
     const token = localStorage.getItem('nexus_auth_token');
@@ -477,6 +495,7 @@ export const App: React.FC = () => {
           onSelectTab={setActiveTab}
           activeDept={activeDept}
           unreadCount={unreadCount}
+          currentUser={user}
         />
 
         {/* View Content */}
@@ -561,12 +580,55 @@ export const App: React.FC = () => {
                 <MembersView members={members} activeDept={activeDept} />
               )}
             </>
-          ) : (
-            <div className="empty-state-card glass-panel">
-              <h2>No Department Enrolled</h2>
-              <p className="text-muted">
-                Please contact your hub administrator to enroll in a department space.
+          ) : user?.role === 'ADMIN' ? (
+            <div className="empty-state-card glass-panel" style={{ padding: '36px', textAlign: 'center' }}>
+              <h2>Hub Administrator Workspace</h2>
+              <p className="text-muted" style={{ marginBottom: '20px' }}>
+                Select any department below to view and manage its resources, projects, and activities:
               </p>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {availableDepartments.map((dept) => (
+                  <button
+                    key={dept.id}
+                    className="btn-primary"
+                    style={{ background: dept.colorHex }}
+                    onClick={() => {
+                      const adminContext: DepartmentMemberContext = {
+                        id: dept.id,
+                        name: dept.name,
+                        slug: dept.slug,
+                        colorHex: dept.colorHex,
+                        icon: dept.icon,
+                        memberRole: 'ADMIN',
+                      };
+                      setActiveDept(adminContext);
+                    }}
+                  >
+                    <span>{dept.name} Space</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state-card glass-panel" style={{ padding: '36px', textAlign: 'center' }}>
+              <h2>No Department Enrolled</h2>
+              <p className="text-muted" style={{ marginBottom: '20px' }}>
+                Choose a department to join and submit your enrollment request:
+              </p>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {availableDepartments.map((dept) => (
+                  <button
+                    key={dept.id}
+                    className="btn-secondary"
+                    onClick={async () => {
+                      await api.departments.join(dept.slug);
+                      await loadMe();
+                    }}
+                  >
+                    Join {dept.name}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </main>

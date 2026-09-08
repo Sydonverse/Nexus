@@ -9,7 +9,7 @@ import {
   Users,
   ShieldCheck,
 } from 'lucide-react';
-import { DepartmentMemberContext } from '../types';
+import { DepartmentMemberContext, User } from '../types';
 
 export type ActiveTab =
   | 'dashboard'
@@ -25,12 +25,14 @@ interface SidebarProps {
   onSelectTab: (tab: ActiveTab) => void;
   activeDept: DepartmentMemberContext | null;
   unreadCount: number;
+  currentUser?: User | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onSelectTab,
   activeDept,
+  currentUser,
 }) => {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -42,6 +44,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'members', label: 'Members Directory', icon: Users },
   ];
 
+  const roleLabel =
+    currentUser?.role === 'ADMIN'
+      ? 'ADMIN (Global Oversight)'
+      : activeDept?.memberRole || 'INTERN';
+
   return (
     <aside className="sidebar-container">
       <div className="sidebar-dept-card" style={{ borderColor: `${activeDept?.colorHex || '#6366f1'}33` }}>
@@ -52,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="dept-card-title">{activeDept?.name || 'Hub Central'}</div>
         <div className="dept-badge-role">
           <ShieldCheck size={12} />
-          <span>Access: {activeDept?.memberRole || 'INTERN'}</span>
+          <span>Access: {roleLabel}</span>
         </div>
       </div>
 

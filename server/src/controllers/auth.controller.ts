@@ -115,6 +115,24 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       expiresIn: '7d',
     });
 
+    let userDepartments: any[] = [];
+    if (user.role === 'ADMIN') {
+      const allDepts = await prisma.department.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, slug: true, colorHex: true, icon: true },
+        orderBy: { name: 'asc' },
+      });
+      userDepartments = allDepts.map((d) => ({
+        ...d,
+        memberRole: 'ADMIN',
+      }));
+    } else {
+      userDepartments = user.departmentMemberships.map((m) => ({
+        ...m.department,
+        memberRole: m.role,
+      }));
+    }
+
     res.json({
       message: 'Login successful',
       token,
@@ -125,10 +143,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         lastName: user.lastName,
         role: user.role,
         avatarUrl: user.avatarUrl,
-        departments: user.departmentMemberships.map((m) => ({
-          ...m.department,
-          memberRole: m.role,
-        })),
+        departments: userDepartments,
       },
     });
   } catch (error) {
@@ -163,6 +178,24 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
+    let userDepartments: any[] = [];
+    if (user.role === 'ADMIN') {
+      const allDepts = await prisma.department.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, slug: true, colorHex: true, icon: true },
+        orderBy: { name: 'asc' },
+      });
+      userDepartments = allDepts.map((d) => ({
+        ...d,
+        memberRole: 'ADMIN',
+      }));
+    } else {
+      userDepartments = user.departmentMemberships.map((m) => ({
+        ...m.department,
+        memberRole: m.role,
+      }));
+    }
+
     res.json({
       user: {
         id: user.id,
@@ -171,10 +204,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
         lastName: user.lastName,
         role: user.role,
         avatarUrl: user.avatarUrl,
-        departments: user.departmentMemberships.map((m) => ({
-          ...m.department,
-          memberRole: m.role,
-        })),
+        departments: userDepartments,
       },
     });
   } catch (error) {
