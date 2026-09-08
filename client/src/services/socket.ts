@@ -1,7 +1,9 @@
 import { io, Socket } from 'socket.io-client';
 import { ChatMessage, AppNotification } from '../types';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000');
 
 class SocketService {
   private socket: Socket | null = null;
