@@ -1,2 +1,2 @@
-# Nexus
+# Knowvia
 Nexus is a centralized progressive web application built for a multi-department tech hub internship program (departments include cybersecurity, data analysis, 3D modelling, web development, graphic design, and others). Instead of relying on WhatsApp, Telegram, and scattered documents, tutors and interns manage learning resources, announcements, class schedules, project work, and communication in one department-scoped workspace. Interns can only see and interact with their own department's space; tutors manage content and progress for the interns assigned to them.
