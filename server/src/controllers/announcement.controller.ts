@@ -7,6 +7,12 @@ import { getIO } from '../socket';
 export const listAnnouncements = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { slug } = req.params;
+    const user = req.user;
+
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
 
     const dept = await prisma.department.findUnique({
       where: { slug },
@@ -18,10 +24,18 @@ export const listAnnouncements = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // Return both department-specific announcements AND global announcements (departmentId is null)
+    // Find announcements this specific user has dismissed/deleted
+    const dismissed = await prisma.dismissedAnnouncement.findMany({
+      where: { userId: user.id },
+      select: { announcementId: true },
+    });
+    const dismissedIds = dismissed.map((d) => d.announcementId);
+
+    // Return department and global announcements that THIS user has NOT dismissed
     const announcements = await prisma.announcement.findMany({
       where: {
         OR: [{ departmentId: dept.id }, { departmentId: null }],
+        id: { notIn: dismissedIds },
       },
       include: {
         author: {
@@ -145,7 +159,7 @@ export const deleteAnnouncement = async (req: AuthRequest, res: Response): Promi
 
     const announcement = await prisma.announcement.findUnique({
       where: { id },
-      include: { department: { select: { slug: true } } },
+      select: { id: true },
     });
 
     if (!announcement) {
@@ -153,18 +167,28 @@ export const deleteAnnouncement = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    await prisma.announcement.delete({ where: { id } });
+    // Record personalized dismissal so this announcement is only removed for the current user
+    await prisma.dismissedAnnouncement.upsert({
+      where: {
+        userId_announcementId: {
+          userId: user.id,
+          announcementId: id,
+        },
+      },
+      create: {
+        userId: user.id,
+        announcementId: id,
+      },
+      update: {},
+    });
 
+    // Notify only this user's active client session(s)
     const io = getIO();
     if (io) {
-      if (announcement.department) {
-        io.to(`dept:${announcement.department.slug}`).emit('announcement:deleted', { id });
-      } else {
-        io.emit('announcement:deleted', { id });
-      }
+      io.to(`user:${user.id}`).emit('announcement:deleted', { id });
     }
 
-    res.json({ message: 'Announcement deleted successfully' });
+    res.json({ message: 'Announcement dismissed from your feed' });
   } catch (error) {
     console.error('Delete announcement error:', error);
     res.status(500).json({ error: 'Failed to delete announcement' });
@@ -191,19 +215,38 @@ export const clearDepartmentAnnouncements = async (req: AuthRequest, res: Respon
       return;
     }
 
-    await prisma.announcement.deleteMany({
+    // Find all announcements currently belonging to this department or global
+    const visibleAnnouncements = await prisma.announcement.findMany({
       where: {
         OR: [{ departmentId: dept.id }, { departmentId: null }],
       },
+      select: { id: true },
     });
 
-    const io = getIO();
-    if (io) {
-      io.to(`dept:${dept.slug}`).emit('announcement:cleared', { departmentSlug: dept.slug });
-      io.emit('announcement:cleared', { departmentSlug: dept.slug });
+    // Record personalized dismissal for every visible announcement for this user
+    for (const ann of visibleAnnouncements) {
+      await prisma.dismissedAnnouncement.upsert({
+        where: {
+          userId_announcementId: {
+            userId: user.id,
+            announcementId: ann.id,
+          },
+        },
+        create: {
+          userId: user.id,
+          announcementId: ann.id,
+        },
+        update: {},
+      });
     }
 
-    res.json({ message: 'All announcements cleared successfully' });
+    // Notify only this user's active client session(s)
+    const io = getIO();
+    if (io) {
+      io.to(`user:${user.id}`).emit('announcement:cleared', { departmentSlug: dept.slug });
+    }
+
+    res.json({ message: 'Announcements cleared from your feed' });
   } catch (error) {
     console.error('Clear announcements error:', error);
     res.status(500).json({ error: 'Failed to clear announcements' });

@@ -29,6 +29,7 @@ model User {
   sentMessages          Message[]
   pushSubscriptions     PushSubscription[]
   notifications         Notification[]
+  dismissedAnnouncements DismissedAnnouncement[]
 }
 
 model Department {
@@ -112,6 +113,19 @@ model Announcement {
 
   department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  dismissals DismissedAnnouncement[]
+}
+
+model DismissedAnnouncement {
+  id             String   @id @default(uuid())
+  userId         String
+  announcementId String
+  dismissedAt    DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, announcementId])
 }
 
 model Assignment {

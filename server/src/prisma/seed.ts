@@ -12,6 +12,7 @@ async function main() {
   await prisma.assignment.deleteMany();
   await prisma.message.deleteMany();
   await prisma.classSchedule.deleteMany();
+  await prisma.dismissedAnnouncement.deleteMany();
   await prisma.announcement.deleteMany();
   await prisma.material.deleteMany();
   await prisma.notification.deleteMany();
