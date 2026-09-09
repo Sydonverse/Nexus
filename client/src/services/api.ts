@@ -2,14 +2,15 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 class ApiClient {
   private getToken(): string | null {
-    return localStorage.getItem('nexus_auth_token');
+    return localStorage.getItem('knowvia_auth_token') || localStorage.getItem('nexus_auth_token');
   }
 
   public setToken(token: string) {
-    localStorage.setItem('nexus_auth_token', token);
+    localStorage.setItem('knowvia_auth_token', token);
   }
 
   public removeToken() {
+    localStorage.removeItem('knowvia_auth_token');
     localStorage.removeItem('nexus_auth_token');
   }
 
@@ -40,7 +41,9 @@ class ApiClient {
       try {
         const errorData = await response.json();
         errorMessage = errorData.error || errorData.message || errorMessage;
-      } catch (e) {}
+      } catch {
+        // Fallback to HTTP status text
+      }
       throw new Error(errorMessage);
     }
 
@@ -59,24 +62,16 @@ class ApiClient {
     list: () => this.request<{ departments: any[] }>('/departments'),
     get: (slug: string) => this.request<any>(`/departments/${slug}`),
     join: (slug: string) => this.request<any>(`/departments/${slug}/join`, { method: 'POST' }),
-    members: (slug: string) => this.request<{ members: any[] }>(`/departments/${slug}/members`),
-    updateMember: (slug: string, memberId: string, data: any) =>
-      this.request<any>(`/departments/${slug}/members/${memberId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   };
 
-  // Resources
-  public resources = {
-    list: (slug: string, params?: { category?: string; search?: string }) => {
-      const query = new URLSearchParams();
-      if (params?.category && params.category !== 'ALL') query.append('category', params.category);
-      if (params?.search) query.append('search', params.search);
-      const qs = query.toString();
-      return this.request<{ resources: any[] }>(`/departments/${slug}/resources${qs ? `?${qs}` : ''}`);
-    },
+  // Learning Materials (File Sharing)
+  public materials = {
+    list: (slug: string) =>
+      this.request<{ materials: any[] }>(`/departments/${slug}/materials`),
     upload: (slug: string, formData: FormData) =>
-      this.request<any>(`/departments/${slug}/resources`, { method: 'POST', body: formData }),
+      this.request<any>(`/departments/${slug}/materials`, { method: 'POST', body: formData }),
     delete: (slug: string, id: string) =>
-      this.request<any>(`/departments/${slug}/resources/${id}`, { method: 'DELETE' }),
+      this.request<any>(`/departments/${slug}/materials/${id}`, { method: 'DELETE' }),
   };
 
   // Announcements
@@ -88,58 +83,52 @@ class ApiClient {
       this.request<any>(`/departments/${slug}/announcements/${id}`, { method: 'DELETE' }),
   };
 
-  // Schedules
+  // Class Schedules
   public schedules = {
     list: (slug: string) => this.request<{ schedules: any[] }>(`/departments/${slug}/schedules`),
     create: (slug: string, data: any) =>
       this.request<any>(`/departments/${slug}/schedules`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (slug: string, id: string, data: any) =>
+      this.request<any>(`/departments/${slug}/schedules/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (slug: string, id: string) =>
       this.request<any>(`/departments/${slug}/schedules/${id}`, { method: 'DELETE' }),
   };
 
-  // Projects
-  public projects = {
-    list: (slug: string) => this.request<{ projects: any[] }>(`/departments/${slug}/projects`),
-    get: (slug: string, projectId: string) =>
-      this.request<{ project: any }>(`/departments/${slug}/projects/${projectId}`),
+  // Assignments Management
+  public assignments = {
+    list: (slug: string) =>
+      this.request<{ assignments: any[]; progressStats?: any }>(`/departments/${slug}/assignments`),
     create: (slug: string, data: any) =>
-      this.request<any>(`/departments/${slug}/projects`, { method: 'POST', body: JSON.stringify(data) }),
-    createGroup: (slug: string, projectId: string, data: any) =>
-      this.request<any>(`/departments/${slug}/projects/${projectId}/groups`, { method: 'POST', body: JSON.stringify(data) }),
-    createTask: (slug: string, projectId: string, data: any) =>
-      this.request<any>(`/departments/${slug}/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
-    updateTaskStatus: (slug: string, projectId: string, taskId: string, status: string) =>
-      this.request<any>(`/departments/${slug}/projects/${projectId}/tasks/${taskId}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      }),
-    submitWork: (slug: string, projectId: string, taskId: string, formData: FormData) =>
-      this.request<any>(`/departments/${slug}/projects/${projectId}/tasks/${taskId}/submissions`, {
+      this.request<any>(`/departments/${slug}/assignments`, { method: 'POST', body: JSON.stringify(data) }),
+    submit: (slug: string, assignmentId: string, formData: FormData) =>
+      this.request<any>(`/departments/${slug}/assignments/${assignmentId}/submit`, {
         method: 'POST',
         body: formData,
       }),
-    giveFeedback: (slug: string, projectId: string, taskId: string, submissionId: string, data: any) =>
+    review: (slug: string, assignmentId: string, submissionId: string, data: any) =>
       this.request<any>(
-        `/departments/${slug}/projects/${projectId}/tasks/${taskId}/submissions/${submissionId}/feedback`,
+        `/departments/${slug}/assignments/${assignmentId}/submissions/${submissionId}/review`,
         { method: 'POST', body: JSON.stringify(data) }
       ),
+    delete: (slug: string, assignmentId: string) =>
+      this.request<any>(`/departments/${slug}/assignments/${assignmentId}`, { method: 'DELETE' }),
   };
 
-  // Messages
+  // Chat Messages
   public messages = {
-    list: (slug: string, limit = 50) =>
-      this.request<{ messages: any[] }>(`/departments/${slug}/messages?limit=${limit}`),
-    send: (slug: string, data: { content: string; attachmentUrls?: string[] }) =>
+    list: (slug: string) => this.request<{ messages: any[] }>(`/departments/${slug}/messages`),
+    send: (slug: string, data: { content: string; replyToId?: string | null }) =>
       this.request<any>(`/departments/${slug}/messages`, { method: 'POST', body: JSON.stringify(data) }),
   };
 
-  // Notifications & Push
+  // In-App & Push Notifications
   public notifications = {
     list: () => this.request<{ notifications: any[]; unreadCount: number }>('/notifications'),
     markRead: (id: string) => this.request<any>(`/notifications/${id}/read`, { method: 'PATCH' }),
-    markAllRead: () => this.request<any>('/notifications/read-all', { method: 'POST' }),
+    markAllRead: () => this.request<any>('/notifications/read-all', { method: 'PATCH' }),
     getVapidKey: () => this.request<{ publicKey: string }>('/notifications/vapid-key'),
-    subscribePush: (data: any) => this.request<any>('/notifications/subscribe', { method: 'POST', body: JSON.stringify(data) }),
+    subscribePush: (data: { endpoint: string; keys: { p256dh: string; auth: string }; userAgent?: string }) =>
+      this.request<any>('/notifications/subscribe', { method: 'POST', body: JSON.stringify(data) }),
     unsubscribePush: (endpoint: string) =>
       this.request<any>('/notifications/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
   };

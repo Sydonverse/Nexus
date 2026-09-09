@@ -8,6 +8,7 @@ export interface User {
   role: UserRole;
   avatarUrl?: string | null;
   departments?: DepartmentMemberContext[];
+  department?: DepartmentMemberContext;
 }
 
 export interface DepartmentMemberContext {
@@ -16,6 +17,7 @@ export interface DepartmentMemberContext {
   slug: string;
   colorHex: string;
   icon: string;
+  description?: string;
   memberRole: 'TUTOR' | 'INTERN' | 'ADMIN';
 }
 
@@ -29,76 +31,10 @@ export interface Department {
   isActive: boolean;
   _count?: {
     members: number;
-    resources: number;
-    projects: number;
+    materials: number;
+    assignments: number;
     announcements?: number;
     schedules?: number;
-  };
-}
-
-export interface DepartmentMember {
-  id: string;
-  userId: string;
-  departmentId: string;
-  role: 'TUTOR' | 'INTERN';
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  joinedAt: string;
-  user: {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    avatarUrl?: string | null;
-    role: UserRole;
-  };
-}
-
-export type ResourceCategory =
-  | 'ALL'
-  | 'LECTURE'
-  | 'TUTORIAL'
-  | 'EXERCISE'
-  | 'REFERENCE'
-  | 'TOOL'
-  | 'OTHER';
-
-export interface Resource {
-  id: string;
-  departmentId: string;
-  uploadedById: string;
-  title: string;
-  description: string;
-  fileUrl: string;
-  fileName: string;
-  fileMimeType: string;
-  fileSizeBytes: number;
-  category: ResourceCategory;
-  tags?: string | null;
-  isPinned: boolean;
-  createdAt: string;
-  uploader?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-  };
-}
-
-export interface Announcement {
-  id: string;
-  departmentId: string;
-  authorId: string;
-  title: string;
-  content: string;
-  priority: 'NORMAL' | 'IMPORTANT' | 'URGENT';
-  isPinned: boolean;
-  createdAt: string;
-  author?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-    avatarUrl?: string | null;
   };
 }
 
@@ -112,8 +48,75 @@ export interface ClassSchedule {
   endTime: string;
   location: string;
   meetingLink?: string | null;
+  reminderSent?: boolean;
   createdAt: string;
   scheduler?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    avatarUrl?: string | null;
+  };
+}
+
+export interface Material {
+  id: string;
+  departmentId: string;
+  uploadedById: string;
+  title: string;
+  description: string;
+  fileName: string;
+  fileUrl: string;
+  fileMimeType: string;
+  fileSizeBytes: number;
+  createdAt: string;
+  uploader?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    avatarUrl?: string | null;
+  };
+}
+
+export interface Announcement {
+  id: string;
+  departmentId?: string | null; // null for global announcements
+  authorId: string;
+  title: string;
+  content: string;
+  priority: 'NORMAL' | 'IMPORTANT' | 'URGENT';
+  sourceType?: 'ASSIGNMENT' | 'CLASS_SCHEDULE' | 'MATERIAL' | null;
+  sourceId?: string | null;
+  isPinned: boolean;
+  createdAt: string;
+  author?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    avatarUrl?: string | null;
+  };
+  department?: {
+    id: string;
+    name: string;
+    slug: string;
+    colorHex: string;
+  } | null;
+}
+
+export type AssignmentStatus = 'OPEN' | 'CLOSED' | 'GRADED';
+export type SubmissionVerdict = 'APPROVED' | 'NEEDS_REVISION' | 'REJECTED';
+export type SubmissionStatus = 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'NEEDS_REVISION' | 'REJECTED';
+
+export interface SubmissionReview {
+  id: string;
+  submissionId: string;
+  reviewerId: string;
+  comment: string;
+  verdict: SubmissionVerdict;
+  createdAt: string;
+  reviewer?: {
     id: string;
     firstName: string;
     lastName: string;
@@ -121,113 +124,66 @@ export interface ClassSchedule {
   };
 }
 
-export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
-export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-
-export interface TaskAssignment {
+export interface Submission {
   id: string;
-  taskId: string;
-  userId: string;
-  user: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    avatarUrl?: string | null;
-  };
-}
-
-export interface TaskSubmission {
-  id: string;
-  taskId: string;
+  assignmentId: string;
   submittedById: string;
   notes: string;
-  fileUrls: string; // JSON string
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSizeBytes?: number | null;
+  status: SubmissionStatus;
   submittedAt: string;
-  submitter: {
+  submitter?: {
     id: string;
+    email?: string;
     firstName: string;
     lastName: string;
+    role: string;
+    avatarUrl?: string | null;
   };
-  feedbacks: SubmissionFeedback[];
+  reviews: SubmissionReview[];
 }
 
-export interface SubmissionFeedback {
-  id: string;
-  submissionId: string;
-  reviewerId: string;
-  comment: string;
-  verdict: 'APPROVED' | 'NEEDS_REVISION' | 'REJECTED';
-  createdAt: string;
-  reviewer: {
-    id: string;
-    firstName: string;
-    lastName: string;
-  };
-}
-
-export interface Task {
-  id: string;
-  projectId: string;
-  projectGroupId?: string | null;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  dueDate?: string | null;
-  sortOrder: number;
-  projectGroup?: {
-    id: string;
-    name: string;
-  } | null;
-  assignments: TaskAssignment[];
-  submissions: TaskSubmission[];
-}
-
-export interface ProjectGroup {
-  id: string;
-  projectId: string;
-  name: string;
-  description?: string | null;
-  members: {
-    id: string;
-    groupId: string;
-    userId: string;
-    role: 'LEAD' | 'MEMBER';
-    user: {
-      id: string;
-      firstName: string;
-      lastName: string;
-      email: string;
-      avatarUrl?: string | null;
-    };
-  }[];
-}
-
-export interface Project {
+export interface Assignment {
   id: string;
   departmentId: string;
+  createdById: string;
   title: string;
   description: string;
-  status: 'PLANNING' | 'IN_PROGRESS' | 'REVIEW' | 'COMPLETED';
-  startDate?: string | null;
+  status: AssignmentStatus;
   dueDate?: string | null;
+  maxFileSize: number;
   createdAt: string;
   creator?: {
     id: string;
     firstName: string;
     lastName: string;
+    role: string;
+    avatarUrl?: string | null;
   };
-  groupsCount?: number;
-  groups?: ProjectGroup[];
-  tasks?: Task[];
-  stats: {
-    totalTasks: number;
-    doneTasks: number;
-    inProgressTasks: number;
-    inReviewTasks: number;
-    todoTasks: number;
-    percentComplete: number;
-  };
+  submissions: Submission[];
+}
+
+export interface AssignmentProgressStats {
+  totalAssignments: number;
+  submittedCount: number;
+  approvedCount: number;
+  needsRevisionCount: number;
+  pendingReviewCount: number;
+  completionPercentage: number;
+  primaryAssignment?: {
+    id: string;
+    title: string;
+    dueDate?: string | null;
+    status: string;
+  } | null;
+  recentReviews: Array<{
+    assignmentTitle: string;
+    verdict: string;
+    comment: string;
+    date: string;
+  }>;
 }
 
 export interface ChatMessage {
@@ -235,7 +191,6 @@ export interface ChatMessage {
   departmentId: string;
   senderId: string;
   content: string;
-  attachmentUrls?: string | null;
   replyToId?: string | null;
   createdAt: string;
   sender: {
@@ -245,13 +200,22 @@ export interface ChatMessage {
     role: string;
     avatarUrl?: string | null;
   };
+  replyTo?: {
+    id: string;
+    content: string;
+    sender: {
+      id: string;
+      firstName: string;
+      lastName: string;
+    };
+  } | null;
 }
 
 export interface AppNotification {
   id: string;
   recipientId: string;
   departmentId?: string | null;
-  type: 'ANNOUNCEMENT' | 'CLASS_SCHEDULE' | 'PROJECT_UPDATE' | 'TASK_ASSIGNED' | 'FEEDBACK' | 'MESSAGE' | 'RESOURCE';
+  type: string;
   title: string;
   body: string;
   actionUrl: string;

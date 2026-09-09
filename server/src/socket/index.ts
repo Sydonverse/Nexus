@@ -5,7 +5,7 @@ import prisma from '../config/prisma';
 
 let io: Server | null = null;
 
-const JWT_SECRET = process.env.JWT_SECRET || 'nexus_jwt_secret_dev_key_2026_secure';
+const JWT_SECRET = process.env.JWT_SECRET || 'knowvia_jwt_secret_dev_key_2026_secure';
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -20,7 +20,7 @@ interface AuthenticatedSocket extends Socket {
 export const initSocket = (httpServer: HttpServer): Server => {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL || 'http://localhost:3000',
+      origin: [process.env.CLIENT_URL || 'http://localhost:3000', 'http://localhost:3000', 'http://127.0.0.1:3000'],
       credentials: true,
       methods: ['GET', 'POST'],
     },
@@ -67,7 +67,7 @@ export const initSocket = (httpServer: HttpServer): Server => {
     // Join personal notification channel
     socket.join(`user:${user.id}`);
 
-    // Join rooms for all approved departments
+    // Join rooms for all approved departments (for admin: all departments; for tutor/student: their single department)
     try {
       if (user.role === 'ADMIN') {
         const allDepts = await prisma.department.findMany({ select: { slug: true } });
@@ -83,11 +83,11 @@ export const initSocket = (httpServer: HttpServer): Server => {
       console.error('Error auto-joining socket rooms:', e);
     }
 
-    // Handle department chat messages
-    socket.on('message:send', async (data: { departmentSlug: string; content: string; attachmentUrls?: string }) => {
+    // Handle department chat messages (text-only with reply threading)
+    socket.on('message:send', async (data: { departmentSlug: string; content: string; replyToId?: string }) => {
       try {
-        const { departmentSlug, content, attachmentUrls } = data;
-        if (!content || !departmentSlug) return;
+        const { departmentSlug, content, replyToId } = data;
+        if (!content || !content.trim() || !departmentSlug) return;
 
         const dept = await prisma.department.findUnique({
           where: { slug: departmentSlug },
@@ -107,7 +107,7 @@ export const initSocket = (httpServer: HttpServer): Server => {
             },
           });
           if (!isMember || isMember.status !== 'APPROVED') {
-            socket.emit('error', { message: 'Cannot post message: not a department member' });
+            socket.emit('error', { message: 'Cannot post message: not an approved department member' });
             return;
           }
         }
@@ -116,12 +116,21 @@ export const initSocket = (httpServer: HttpServer): Server => {
           data: {
             departmentId: dept.id,
             senderId: user.id,
-            content,
-            attachmentUrls: attachmentUrls || null,
+            content: content.trim(),
+            replyToId: replyToId || null,
           },
           include: {
             sender: {
               select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
+            },
+            replyTo: {
+              select: {
+                id: true,
+                content: true,
+                sender: {
+                  select: { id: true, firstName: true, lastName: true },
+                },
+              },
             },
           },
         });

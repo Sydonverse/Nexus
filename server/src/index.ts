@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.routes';
 import departmentRoutes from './routes/department.routes';
 import notificationRoutes from './routes/notification.routes';
 import { initSocket } from './socket';
+import { initReminderScheduler } from './services/reminder.service';
 
 const app = express();
 const server = http.createServer(app);
@@ -34,7 +35,7 @@ app.use('/uploads', express.static(uploadDir));
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'Nexus API & Real-time Server', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'Knowvia Knowledge Repo & Real-time Platform', timestamp: new Date().toISOString() });
 });
 
 // API Routes
@@ -50,11 +51,15 @@ app.use((_req: Request, res: Response) => {
 // Initialize WebSocket
 initSocket(server);
 
+// Initialize automated class reminder cron job
+initReminderScheduler();
+
 // Start Server
 server.listen(PORT, () => {
   console.log(`===========================================`);
-  console.log(`🚀 Nexus Hub API Server running on port ${PORT}`);
+  console.log(`🚀 Knowvia Platform API Server running on port ${PORT}`);
   console.log(`📡 WebSocket Real-time active`);
+  console.log(`⏰ Class reminder scheduler initialized`);
   console.log(`🌐 Client Origin: ${CLIENT_URL}`);
   console.log(`===========================================`);
 });

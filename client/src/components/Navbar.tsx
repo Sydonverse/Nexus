@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Bell,
   Download,
@@ -10,6 +10,8 @@ import {
   Palette,
   ChevronDown,
   User as UserIcon,
+  BookOpen,
+  Sparkles,
 } from 'lucide-react';
 import { User, DepartmentMemberContext, AppNotification } from '../types';
 
@@ -39,54 +41,79 @@ export const Navbar: React.FC<NavbarProps> = ({
   canInstallPwa,
   onInstallPwa,
 }) => {
-  const [showDeptMenu, setShowDeptMenu] = React.useState(false);
-  const [showDemoMenu, setShowDemoMenu] = React.useState(false);
-  const [showUserMenu, setShowUserMenu] = React.useState(false);
+  const [showDeptMenu, setShowDeptMenu] = useState(false);
+  const [showDemoMenu, setShowDemoMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const getDeptIcon = (iconName: string) => {
     switch (iconName) {
-      case 'shield': return <Shield size={18} />;
-      case 'bar-chart-2': return <BarChart2 size={18} />;
-      case 'globe': return <Globe size={18} />;
-      case 'box': return <Box size={18} />;
-      case 'palette': return <Palette size={18} />;
-      default: return <Globe size={18} />;
+      case 'shield':
+        return <Shield size={16} />;
+      case 'bar-chart-2':
+        return <BarChart2 size={16} />;
+      case 'globe':
+        return <Globe size={16} />;
+      case 'box':
+        return <Box size={16} />;
+      case 'palette':
+        return <Palette size={16} />;
+      default:
+        return <BookOpen size={16} />;
     }
   };
+
+  const roleBadgeClass =
+    user?.role === 'ADMIN'
+      ? 'badge-role-admin'
+      : user?.role === 'TUTOR'
+      ? 'badge-role-tutor'
+      : 'badge-role-intern';
 
   return (
     <header className="navbar-container">
       <div className="navbar-left">
-        {/* Platform Brand */}
+        {/* Knowvia Brand Logo */}
         <div className="brand-logo-group">
-          <div className="logo-badge" style={{ borderColor: activeDept?.colorHex || '#6366f1' }}>
-            <img src="/icons/icon-192.png" alt="Nexus" className="logo-img" />
+          <div className="logo-badge" style={{ background: activeDept?.colorHex || '#4f46e5' }}>
+            <BookOpen size={20} color="#ffffff" />
           </div>
           <div>
-            <div className="brand-title">NEXUS</div>
-            <div className="brand-subtitle">Tech Hub Central</div>
+            <div className="brand-title">Knowvia</div>
+            <div className="brand-subtitle">Knowledge Repository & Learning Hub</div>
           </div>
         </div>
 
-        {/* Department Switcher Pill */}
+        {/* Department Badge / Switcher */}
         {activeDept && (
           <div className="dept-switcher-dropdown">
             <button
               className="dept-pill-btn"
-              onClick={() => setShowDeptMenu(!showDeptMenu)}
-              style={{
-                borderColor: `${activeDept.colorHex}55`,
-                background: `${activeDept.colorHex}15`,
+              onClick={() => {
+                if (user?.role === 'ADMIN' && departments.length > 1) {
+                  setShowDeptMenu(!showDeptMenu);
+                }
               }}
+              style={{
+                borderColor: `${activeDept.colorHex}40`,
+                background: `${activeDept.colorHex}10`,
+                cursor: user?.role === 'ADMIN' && departments.length > 1 ? 'pointer' : 'default',
+              }}
+              title={
+                user?.role === 'ADMIN'
+                  ? 'Click to switch department workspace'
+                  : `Enrolled Department: ${activeDept.name}`
+              }
             >
               <span style={{ color: activeDept.colorHex }}>{getDeptIcon(activeDept.icon)}</span>
               <span className="dept-name-text">{activeDept.name}</span>
-              {departments.length > 1 && <ChevronDown size={14} className="text-muted" />}
+              {user?.role === 'ADMIN' && departments.length > 1 && (
+                <ChevronDown size={14} className="text-muted" />
+              )}
             </button>
 
-            {showDeptMenu && departments.length > 1 && (
+            {showDeptMenu && user?.role === 'ADMIN' && departments.length > 1 && (
               <div className="dropdown-menu">
-                <div className="dropdown-header">Switch Department Workspace</div>
+                <div className="dropdown-header">Administrator: Switch Department</div>
                 {departments.map((dept) => (
                   <button
                     key={dept.id}
@@ -98,8 +125,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <span style={{ color: dept.colorHex }}>{getDeptIcon(dept.icon)}</span>
                     <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{dept.name}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Role: {dept.memberRole}</div>
+                      <div className="dropdown-item-title">{dept.name}</div>
+                      <div className="dropdown-item-desc">{dept.description?.slice(0, 50)}...</div>
                     </div>
                   </button>
                 ))}
@@ -110,138 +137,164 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       <div className="navbar-right">
-        {/* Hackathon Quick Demo Persona Switcher */}
-        <div className="demo-persona-dropdown">
+        {/* PWA Install Button */}
+        {canInstallPwa && (
+          <button className="btn-secondary btn-sm pwa-install-btn" onClick={onInstallPwa}>
+            <Download size={15} />
+            <span>Install App</span>
+          </button>
+        )}
+
+        {/* Quick Demo Switcher for Evaluation */}
+        <div className="relative-container">
           <button
-            className="demo-switch-btn"
+            className="btn-demo-pill"
             onClick={() => setShowDemoMenu(!showDemoMenu)}
-            title="Switch demo persona for instant hackathon evaluation"
+            title="Switch Demo Role"
           >
-            <span className="demo-dot"></span>
-            <span className="demo-label">Demo Persona</span>
-            <ChevronDown size={14} />
+            <Sparkles size={14} />
+            <span>Switch Role</span>
+            <ChevronDown size={12} />
           </button>
 
           {showDemoMenu && (
             <div className="dropdown-menu demo-dropdown">
-              <div className="dropdown-header">⚡ One-Click Hackathon Persona Switch</div>
+              <div className="dropdown-header">Switch Demo User</div>
               <button
                 className="dropdown-item"
-                onClick={() => { onQuickLogin('admin@nexus.hub'); setShowDemoMenu(false); }}
+                onClick={() => {
+                  onQuickLogin('admin@knowvia.internal');
+                  setShowDemoMenu(false);
+                }}
               >
-                <div className="persona-avatar admin">AD</div>
+                <div className="demo-dot admin-dot"></div>
                 <div>
-                  <div className="persona-name">Sarah Director</div>
-                  <div className="persona-role">Admin (Cross-hub control)</div>
+                  <strong>Sarah Director</strong>
+                  <span className="demo-role-tag">ADMIN</span>
+                  <div className="demo-hint">Global oversight across all departments</div>
                 </div>
               </button>
               <button
                 className="dropdown-item"
-                onClick={() => { onQuickLogin('cyber.tutor@nexus.hub'); setShowDemoMenu(false); }}
+                onClick={() => {
+                  onQuickLogin('cyber.tutor@knowvia.internal');
+                  setShowDemoMenu(false);
+                }}
               >
-                <div className="persona-avatar tutor">AT</div>
+                <div className="demo-dot tutor-dot"></div>
                 <div>
-                  <div className="persona-name">Alex Vance</div>
-                  <div className="persona-role">Cybersecurity Tutor</div>
+                  <strong>Alex Vance</strong>
+                  <span className="demo-role-tag">TUTOR (Cyber)</span>
+                  <div className="demo-hint">Schedule classes, upload materials, create & review assignments</div>
                 </div>
               </button>
               <button
                 className="dropdown-item"
-                onClick={() => { onQuickLogin('david.cyber@nexus.hub'); setShowDemoMenu(false); }}
+                onClick={() => {
+                  onQuickLogin('david.cyber@knowvia.internal');
+                  setShowDemoMenu(false);
+                }}
               >
-                <div className="persona-avatar intern">DK</div>
+                <div className="demo-dot intern-dot"></div>
                 <div>
-                  <div className="persona-name">David Kim</div>
-                  <div className="persona-role">Cyber Intern (Group Alpha)</div>
+                  <strong>David Kim</strong>
+                  <span className="demo-role-tag">STUDENT (Cyber)</span>
+                  <div className="demo-hint">View timetable, download materials, progress tracker, submit work</div>
                 </div>
               </button>
               <button
                 className="dropdown-item"
-                onClick={() => { onQuickLogin('maya.cyber@nexus.hub'); setShowDemoMenu(false); }}
+                onClick={() => {
+                  onQuickLogin('maya.cyber@knowvia.internal');
+                  setShowDemoMenu(false);
+                }}
               >
-                <div className="persona-avatar intern">MP</div>
+                <div className="demo-dot intern-dot"></div>
                 <div>
-                  <div className="persona-name">Maya Patel</div>
-                  <div className="persona-role">Cyber Intern (Group Bravo)</div>
+                  <strong>Maya Patel</strong>
+                  <span className="demo-role-tag">STUDENT (Cyber)</span>
+                  <div className="demo-hint">Assigned work needing revision</div>
                 </div>
               </button>
               <button
                 className="dropdown-item"
-                onClick={() => { onQuickLogin('data.tutor@nexus.hub'); setShowDemoMenu(false); }}
+                onClick={() => {
+                  onQuickLogin('web.tutor@knowvia.internal');
+                  setShowDemoMenu(false);
+                }}
               >
-                <div className="persona-avatar tutor">ER</div>
+                <div className="demo-dot tutor-dot"></div>
                 <div>
-                  <div className="persona-name">Dr. Evelyn Reed</div>
-                  <div className="persona-role">Data Analysis Tutor</div>
-                </div>
-              </button>
-              <button
-                className="dropdown-item"
-                onClick={() => { onQuickLogin('sam.data@nexus.hub'); setShowDemoMenu(false); }}
-              >
-                <div className="persona-avatar intern">ST</div>
-                <div>
-                  <div className="persona-name">Sam Taylor</div>
-                  <div className="persona-role">Data Analysis Intern</div>
+                  <strong>Marcus Chen</strong>
+                  <span className="demo-role-tag">TUTOR (Web Dev)</span>
+                  <div className="demo-hint">Web Dev department workspace</div>
                 </div>
               </button>
             </div>
           )}
         </div>
 
-        {/* Install PWA Button */}
-        {canInstallPwa && (
-          <button className="pwa-install-btn" onClick={onInstallPwa} title="Install App to Device">
-            <Download size={15} />
-            <span className="install-text">Install App</span>
-          </button>
-        )}
-
-        {/* Notifications Bell */}
+        {/* Bell Icon Notification Button */}
         <button
-          className="btn-icon notif-btn"
+          className="icon-btn-pill notif-bell-btn"
           onClick={onOpenNotifications}
-          aria-label="Notifications"
+          aria-label="Announcements and Notifications"
+          title="Announcements & Notifications"
         >
-          <Bell size={19} />
-          {unreadCount > 0 && <span className="notif-badge-pill">{unreadCount}</span>}
+          <Bell size={18} />
+          {unreadCount > 0 && (
+            <span className="notification-badge-count">{unreadCount > 9 ? '9+' : unreadCount}</span>
+          )}
         </button>
 
-        {/* User Profile */}
-        {user && (
-          <div className="user-profile-dropdown">
-            <button
-              className="user-avatar-btn"
-              onClick={() => setShowUserMenu(!showUserMenu)}
-            >
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.firstName} className="avatar-img" />
-              ) : (
-                <div className="avatar-fallback">
-                  {user.firstName[0]}{user.lastName[0]}
-                </div>
-              )}
-              <div className="user-info-text">
-                <span className="user-name">{user.firstName} {user.lastName}</span>
-                <span className="user-role-badge">{user.role}</span>
-              </div>
-            </button>
-
-            {showUserMenu && (
-              <div className="dropdown-menu user-dropdown">
-                <div className="dropdown-header">Signed in as {user.email}</div>
-                <div className="dropdown-divider"></div>
-                <button
-                  className="dropdown-item text-danger"
-                  onClick={() => { onLogout(); setShowUserMenu(false); }}
-                >
-                  <LogOut size={16} />
-                  <span>Log Out</span>
-                </button>
+        {/* User Profile Card & Sign Out */}
+        <div className="relative-container">
+          <button
+            className="user-profile-pill"
+            onClick={() => setShowUserMenu(!showUserMenu)}
+          >
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.firstName} className="avatar-img-sm" />
+            ) : (
+              <div className="avatar-fallback-sm">
+                {user?.firstName?.[0]}
+                {user?.lastName?.[0]}
               </div>
             )}
-          </div>
-        )}
+            <div className="user-profile-meta">
+              <span className="user-profile-name">
+                {user?.firstName} {user?.lastName}
+              </span>
+              <span className={`user-role-chip ${roleBadgeClass}`}>
+                {user?.role}
+              </span>
+            </div>
+            <ChevronDown size={14} className="text-muted" />
+          </button>
+
+          {showUserMenu && (
+            <div className="dropdown-menu user-dropdown">
+              <div className="dropdown-user-header">
+                <div className="dropdown-user-name">
+                  {user?.firstName} {user?.lastName}
+                </div>
+                <div className="dropdown-user-email">{user?.email}</div>
+                <div className="dropdown-user-role">Role: {user?.role}</div>
+              </div>
+              <div className="dropdown-divider"></div>
+              <button
+                className="dropdown-item text-danger"
+                onClick={() => {
+                  setShowUserMenu(false);
+                  onLogout();
+                }}
+              >
+                <LogOut size={16} />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

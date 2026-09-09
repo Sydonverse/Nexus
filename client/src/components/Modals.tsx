@@ -1,157 +1,143 @@
 import React, { useState } from 'react';
 import {
-  X,
   Upload,
   Calendar,
+  ClipboardCheck,
   Megaphone,
-  KanbanSquare,
-  Plus,
-  CheckCircle,
-  FileCheck,
+  X,
+  Clock,
+  ShieldCheck,
+  Video,
+  MapPin,
+  Sparkles,
 } from 'lucide-react';
-import { ResourceCategory, TaskPriority, Task, DepartmentMemberContext } from '../types';
+import { DepartmentMemberContext } from '../types';
 
-interface ModalBaseProps {
+// ─── 1. UPLOAD LEARNING MATERIAL MODAL ─────────────────────────
+interface UploadMaterialModalProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-// 1. Upload Resource Modal
-interface UploadResourceModalProps extends ModalBaseProps {
-  onUpload: (formData: FormData) => Promise<void>;
+  onSubmit: (formData: FormData) => Promise<void>;
   activeDept: DepartmentMemberContext;
 }
 
-export const UploadResourceModal: React.FC<UploadResourceModalProps> = ({
+export const UploadMaterialModal: React.FC<UploadMaterialModalProps> = ({
   isOpen,
   onClose,
-  onUpload,
+  onSubmit,
+  activeDept,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<ResourceCategory>('TUTORIAL');
-  const [tags, setTags] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || !title) return;
+    if (!title.trim() || !file) {
+      setError('Title and a valid file are required.');
+      return;
+    }
 
-    setLoading(true);
+    if (file.size > 25 * 1024 * 1024) {
+      setError('File exceeds the 25MB storage efficiency limit.');
+      return;
+    }
+
+    setIsUploading(true);
+    setError('');
+
     try {
       const formData = new FormData();
-      formData.append('title', title);
-      formData.append('description', description);
-      formData.append('category', category);
-      formData.append('tags', tags);
+      formData.append('title', title.trim());
+      formData.append('description', description.trim());
       formData.append('file', file);
 
-      await onUpload(formData);
+      await onSubmit(formData);
       onClose();
-    } catch (err) {
-      console.error(err);
+      setTitle('');
+      setDescription('');
+      setFile(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload material');
     } finally {
-      setLoading(false);
+      setIsUploading(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal-dialog">
         <div className="modal-header">
           <div className="modal-title-group">
-            <Upload size={20} className="text-accent" />
-            <h3 className="modal-title">Upload Learning Resource</h3>
+            <Upload size={18} color="#0ea5e9" />
+            <h3 className="modal-title">Upload Learning Material</h3>
           </div>
-          <button className="btn-icon" onClick={onClose}><X size={18} /></button>
+          <button className="btn-close-modal" onClick={onClose} disabled={isUploading}>
+            <X size={18} />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="form-group">
-            <label className="form-label">Resource Title *</label>
-            <input
-              type="text"
-              required
-              className="input-field"
-              placeholder="e.g. OWASP Security Assessment Lab Guide"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            {error && <div className="form-error-banner">{error}</div>}
 
-          <div className="form-group">
-            <label className="form-label">Description</label>
-            <textarea
-              className="input-field textarea-field"
-              rows={3}
-              placeholder="Provide context on what this resource covers..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          <div className="form-row">
-            <div className="form-group flex-1">
-              <label className="form-label">Category</label>
-              <select
-                className="input-field"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as ResourceCategory)}
-              >
-                <option value="LECTURE">Lecture</option>
-                <option value="TUTORIAL">Tutorial</option>
-                <option value="EXERCISE">Exercise / Lab</option>
-                <option value="REFERENCE">Reference Guide</option>
-                <option value="TOOL">Tool / Script</option>
-                <option value="OTHER">Other</option>
-              </select>
+            <div className="security-notice-box">
+              <ShieldCheck size={16} color="#10b981" />
+              <span>
+                Any file type accepted. 25MB max size. Automated magic-byte security inspection is
+                enforced.
+              </span>
             </div>
 
-            <div className="form-group flex-1">
-              <label className="form-label">Tags (comma separated)</label>
+            <div className="form-field">
+              <label className="field-label">Material Title *</label>
               <input
                 type="text"
-                className="input-field"
-                placeholder="lab, security, guide"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
+                placeholder="e.g., OWASP Vulnerability Mitigation Guide"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                className="input-clean"
               />
             </div>
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">Attachment File * (any file type)</label>
-            <div className="file-dropzone">
+            <div className="form-field">
+              <label className="field-label">Description & Usage Notes</label>
+              <textarea
+                rows={3}
+                placeholder="Summary of what this document covers and how students should use it..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="textarea-clean"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="field-label">Select File (Max 25MB) *</label>
               <input
                 type="file"
-                required
-                id="file-input"
-                className="file-input-hidden"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
+                required
+                className="file-input-clean"
               />
-              <label htmlFor="file-input" className="file-dropzone-label">
-                <Upload size={24} className="text-muted mb-2" />
-                <span className="dropzone-text">
-                  {file ? file.name : 'Click to select or drop file here'}
-                </span>
-                {file && (
-                  <span className="text-muted text-xs">
-                    {(file.size / (1024 * 1024)).toFixed(2)} MB
-                  </span>
-                )}
-              </label>
+            </div>
+
+            <div className="auto-announcement-hint">
+              <Sparkles size={13} color="#f59e0b" />
+              <span>An announcement and notification will be auto-generated for students.</span>
             </div>
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={isUploading}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={loading || !file || !title}>
-              {loading ? 'Uploading...' : 'Publish Resource'}
+            <button type="submit" className="btn-primary" disabled={isUploading}>
+              {isUploading ? 'Validating & Uploading...' : 'Upload & Share Material'}
             </button>
           </div>
         </form>
@@ -160,240 +146,171 @@ export const UploadResourceModal: React.FC<UploadResourceModalProps> = ({
   );
 };
 
-// 2. Post Announcement Modal
-interface CreateAnnouncementModalProps extends ModalBaseProps {
-  onCreate: (data: any) => Promise<void>;
-}
-
-export const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({
-  isOpen,
-  onClose,
-  onCreate,
-}) => {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [priority, setPriority] = useState<'NORMAL' | 'IMPORTANT' | 'URGENT'>('NORMAL');
-  const [isPinned, setIsPinned] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !content) return;
-
-    setLoading(true);
-    try {
-      await onCreate({ title, content, priority, isPinned });
-      onClose();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-title-group">
-            <Megaphone size={20} className="text-accent" />
-            <h3 className="modal-title">Post Announcement</h3>
-          </div>
-          <button className="btn-icon" onClick={onClose}><X size={18} /></button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="form-group">
-            <label className="form-label">Announcement Title *</label>
-            <input
-              type="text"
-              required
-              className="input-field"
-              placeholder="e.g. Mid-term CTF Challenge Registration"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Message Content *</label>
-            <textarea
-              required
-              className="input-field textarea-field"
-              rows={4}
-              placeholder="Write the detailed broadcast message for interns..."
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-            />
-          </div>
-
-          <div className="form-row">
-            <div className="form-group flex-1">
-              <label className="form-label">Priority</label>
-              <select
-                className="input-field"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as any)}
-              >
-                <option value="NORMAL">Normal</option>
-                <option value="IMPORTANT">Important</option>
-                <option value="URGENT">Urgent (Red Alert)</option>
-              </select>
-            </div>
-
-            <div className="form-group flex-1 flex-center">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={isPinned}
-                  onChange={(e) => setIsPinned(e.target.checked)}
-                />
-                <span>Pin to top of feed</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={loading || !title || !content}>
-              {loading ? 'Posting...' : 'Broadcast to Department'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// 3. Schedule Class Modal
-interface ScheduleClassModalProps extends ModalBaseProps {
-  onSchedule: (data: any) => Promise<void>;
+// ─── 2. SCHEDULE CLASS MODAL ──────────────────────────────────
+interface ScheduleClassModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: any) => Promise<void>;
+  activeDept: DepartmentMemberContext;
 }
 
 export const ScheduleClassModal: React.FC<ScheduleClassModalProps> = ({
   isOpen,
   onClose,
-  onSchedule,
+  onSubmit,
+  activeDept,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [location, setLocation] = useState('Tech Hub Room 2A');
+  const [location, setLocation] = useState('Tech Hub Room 2B / Virtual');
   const [meetingLink, setMeetingLink] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !startTime || !endTime) return;
+    if (!title.trim() || !startTime || !endTime) {
+      setError('Title, start time, and end time are required.');
+      return;
+    }
 
-    setLoading(true);
+    if (new Date(startTime) >= new Date(endTime)) {
+      setError('End time must be after start time.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
     try {
-      await onSchedule({
-        title,
-        description,
-        startTime,
-        endTime,
-        location,
-        meetingLink,
+      await onSubmit({
+        title: title.trim(),
+        description: description.trim(),
+        startTime: new Date(startTime).toISOString(),
+        endTime: new Date(endTime).toISOString(),
+        location: location.trim(),
+        meetingLink: meetingLink.trim() || null,
       });
       onClose();
+      setTitle('');
+      setDescription('');
+      setStartTime('');
+      setEndTime('');
+      setMeetingLink('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to schedule class');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal-dialog">
         <div className="modal-header">
           <div className="modal-title-group">
-            <Calendar size={20} className="text-accent" />
-            <h3 className="modal-title">Schedule New Training Class</h3>
+            <Calendar size={18} color="#4f46e5" />
+            <h3 className="modal-title">Schedule Class / Session</h3>
           </div>
-          <button className="btn-icon" onClick={onClose}><X size={18} /></button>
+          <button className="btn-close-modal" onClick={onClose} disabled={isSubmitting}>
+            <X size={18} />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="form-group">
-            <label className="form-label">Session Topic / Title *</label>
-            <input
-              type="text"
-              required
-              className="input-field"
-              placeholder="e.g. Hands-on Penetration Testing Workshop"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            {error && <div className="form-error-banner">{error}</div>}
 
-          <div className="form-group">
-            <label className="form-label">Agenda / Description</label>
-            <textarea
-              className="input-field textarea-field"
-              rows={3}
-              placeholder="Session objectives and required tools..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          <div className="form-row">
-            <div className="form-group flex-1">
-              <label className="form-label">Start Time *</label>
+            <div className="form-field">
+              <label className="field-label">Class Session Title *</label>
               <input
-                type="datetime-local"
+                type="text"
+                placeholder="e.g., Live Hands-on Pen-Testing Lab"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
                 required
-                className="input-field"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                className="input-clean"
               />
             </div>
 
-            <div className="form-group flex-1">
-              <label className="form-label">End Time *</label>
-              <input
-                type="datetime-local"
-                required
-                className="input-field"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+            <div className="form-field">
+              <label className="field-label">Session Description</label>
+              <textarea
+                rows={2}
+                placeholder="What topics, exercises, or tools will be covered in this class?"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="textarea-clean"
               />
             </div>
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">Physical Location</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="e.g. Lab 2B / Tech Hub Auditorium"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
-          </div>
+            <div className="form-grid-2">
+              <div className="form-field">
+                <label className="field-label">Start Date & Time *</label>
+                <input
+                  type="datetime-local"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  required
+                  className="input-clean"
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label">Virtual Meeting Link (Zoom / Meet)</label>
-            <input
-              type="url"
-              className="input-field"
-              placeholder="https://meet.google.com/..."
-              value={meetingLink}
-              onChange={(e) => setMeetingLink(e.target.value)}
-            />
+              <div className="form-field">
+                <label className="field-label">End Date & Time *</label>
+                <input
+                  type="datetime-local"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  required
+                  className="input-clean"
+                />
+              </div>
+            </div>
+
+            <div className="form-grid-2">
+              <div className="form-field">
+                <label className="field-label">Location / Room</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Cyber Lab 2B / Virtual"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="input-clean"
+                />
+              </div>
+
+              <div className="form-field">
+                <label className="field-label">Virtual Meeting Link (Zoom/Google Meet)</label>
+                <input
+                  type="url"
+                  placeholder="https://meet.google.com/xyz-knowvia"
+                  value={meetingLink}
+                  onChange={(e) => setMeetingLink(e.target.value)}
+                  className="input-clean"
+                />
+              </div>
+            </div>
+
+            <div className="auto-announcement-hint">
+              <Clock size={13} color="#10b981" />
+              <span>
+                Students will receive an announcement now and an automated push reminder 1 day before
+                the session.
+              </span>
+            </div>
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={loading || !title || !startTime}>
-              {loading ? 'Scheduling...' : 'Schedule Class & Notify'}
+            <button type="submit" className="btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Scheduling...' : 'Schedule Class Session'}
             </button>
           </div>
         </form>
@@ -402,410 +319,271 @@ export const ScheduleClassModal: React.FC<ScheduleClassModalProps> = ({
   );
 };
 
-// 4. Create Project Modal
-interface CreateProjectModalProps extends ModalBaseProps {
-  onCreate: (data: any) => Promise<void>;
+// ─── 3. CREATE ASSIGNMENT MODAL ───────────────────────────────
+interface CreateAssignmentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: any) => Promise<void>;
+  activeDept: DepartmentMemberContext;
 }
 
-export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
+export const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   isOpen,
   onClose,
-  onCreate,
+  onSubmit,
+  activeDept,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [groupNames, setGroupNames] = useState('Group Alpha, Group Bravo');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title) return;
+    if (!title.trim() || !description.trim()) {
+      setError('Title and description are required.');
+      return;
+    }
 
-    setLoading(true);
+    setIsSubmitting(true);
+    setError('');
+
     try {
-      const groups = groupNames
-        .split(',')
-        .map((g) => g.trim())
-        .filter(Boolean);
-
-      await onCreate({
-        title,
-        description,
+      await onSubmit({
+        title: title.trim(),
+        description: description.trim(),
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-        groupNames: groups,
       });
       onClose();
+      setTitle('');
+      setDescription('');
+      setDueDate('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create assignment');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal-dialog">
         <div className="modal-header">
           <div className="modal-title-group">
-            <KanbanSquare size={20} className="text-accent" />
-            <h3 className="modal-title">Create Team Project</h3>
+            <ClipboardCheck size={18} color="#4f46e5" />
+            <h3 className="modal-title">Create Assignment</h3>
           </div>
-          <button className="btn-icon" onClick={onClose}><X size={18} /></button>
+          <button className="btn-close-modal" onClick={onClose} disabled={isSubmitting}>
+            <X size={18} />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="form-group">
-            <label className="form-label">Project Title *</label>
-            <input
-              type="text"
-              required
-              className="input-field"
-              placeholder="e.g. Enterprise Security Audit"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            {error && <div className="form-error-banner">{error}</div>}
 
-          <div className="form-group">
-            <label className="form-label">Project Scope / Overview</label>
-            <textarea
-              className="input-field textarea-field"
-              rows={3}
-              placeholder="Detail the project goals and expectations..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
+            <div className="form-field">
+              <label className="field-label">Assignment Title *</label>
+              <input
+                type="text"
+                placeholder="e.g., Enterprise Vulnerability Assessment Report"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                className="input-clean"
+              />
+            </div>
 
-          <div className="form-group">
-            <label className="form-label">Target Completion Date</label>
-            <input
-              type="date"
-              className="input-field"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
+            <div className="form-field">
+              <label className="field-label">Instructions & Deliverable Requirements *</label>
+              <textarea
+                rows={4}
+                placeholder="Detail the technical tasks, methodology, required file format, and grading rubric..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                required
+                className="textarea-clean"
+              />
+            </div>
 
-          <div className="form-group">
-            <label className="form-label">Working Groups (comma separated)</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="Group Alpha, Group Bravo, Frontend Team"
-              value={groupNames}
-              onChange={(e) => setGroupNames(e.target.value)}
-            />
-            <span className="text-muted text-xs">
-              Interns in this department can be organized into these project groups.
-            </span>
-          </div>
+            <div className="form-field">
+              <label className="field-label">Submission Deadline (Optional)</label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="input-clean"
+              />
+            </div>
 
-          <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={loading || !title}>
-              {loading ? 'Creating...' : 'Launch Project'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// 5. Create Task Modal
-interface CreateTaskModalProps extends ModalBaseProps {
-  projectId: string;
-  onCreate: (data: any) => Promise<void>;
-}
-
-export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
-  isOpen,
-  onClose,
-  onCreate,
-}) => {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<TaskPriority>('MEDIUM');
-  const [loading, setLoading] = useState(false);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title) return;
-
-    setLoading(true);
-    try {
-      await onCreate({ title, description, priority });
-      onClose();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-title-group">
-            <Plus size={20} className="text-accent" />
-            <h3 className="modal-title">Add Project Task</h3>
-          </div>
-          <button className="btn-icon" onClick={onClose}><X size={18} /></button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="form-group">
-            <label className="form-label">Task Title *</label>
-            <input
-              type="text"
-              required
-              className="input-field"
-              placeholder="e.g. Conduct OSINT Subdomain Enumeration"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Task Instructions</label>
-            <textarea
-              className="input-field textarea-field"
-              rows={3}
-              placeholder="Specify the requirements and expected output..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Priority</label>
-            <select
-              className="input-field"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as TaskPriority)}
-            >
-              <option value="LOW">Low</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="HIGH">High</option>
-              <option value="CRITICAL">Critical</option>
-            </select>
-          </div>
-
-          <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={loading || !title}>
-              {loading ? 'Adding...' : 'Add Task to Board'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// 6. Submit Deliverables Modal (for Interns)
-interface SubmitWorkModalProps extends ModalBaseProps {
-  task: Task | null;
-  onSubmitWork: (formData: FormData) => Promise<void>;
-}
-
-export const SubmitWorkModal: React.FC<SubmitWorkModalProps> = ({
-  isOpen,
-  onClose,
-  task,
-  onSubmitWork,
-}) => {
-  const [notes, setNotes] = useState('');
-  const [files, setFiles] = useState<FileList | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  if (!isOpen || !task) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append('notes', notes);
-      if (files) {
-        for (let i = 0; i < files.length; i++) {
-          formData.append('files', files[i]);
-        }
-      }
-      await onSubmitWork(formData);
-      onClose();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-title-group">
-            <FileCheck size={20} className="text-accent" />
-            <h3 className="modal-title">Submit Deliverables</h3>
-          </div>
-          <button className="btn-icon" onClick={onClose}><X size={18} /></button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="submission-task-banner">
-            <span className="text-muted text-xs">Submitting work for:</span>
-            <div className="task-title-highlight">{task.title}</div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Submission Notes & Summary *</label>
-            <textarea
-              required
-              className="input-field textarea-field"
-              rows={4}
-              placeholder="Describe your implementation, tests performed, and any findings..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Upload Completed Files / Reports</label>
-            <input
-              type="file"
-              multiple
-              className="input-field"
-              onChange={(e) => setFiles(e.target.files)}
-            />
-            <span className="text-muted text-xs">
-              Attach code zips, PDFs, scan logs, screenshots, or 3D models.
-            </span>
-          </div>
-
-          <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={loading || !notes}>
-              {loading ? 'Submitting...' : 'Submit to Tutor for Review'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// 7. Give Feedback Modal (for Tutors)
-interface GiveFeedbackModalProps extends ModalBaseProps {
-  task: Task | null;
-  submissionId: string | null;
-  onGiveFeedback: (data: { comment: string; verdict: string }) => Promise<void>;
-}
-
-export const GiveFeedbackModal: React.FC<GiveFeedbackModalProps> = ({
-  isOpen,
-  onClose,
-  task,
-  onGiveFeedback,
-}) => {
-  const [comment, setComment] = useState('');
-  const [verdict, setVerdict] = useState<'APPROVED' | 'NEEDS_REVISION'>('APPROVED');
-  const [loading, setLoading] = useState(false);
-
-  if (!isOpen || !task) return null;
-
-  const latestSubmission = task.submissions?.[0];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!comment) return;
-
-    setLoading(true);
-    try {
-      await onGiveFeedback({ comment, verdict });
-      onClose();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-title-group">
-            <CheckCircle size={20} className="text-accent" />
-            <h3 className="modal-title">Review Deliverables & Feedback</h3>
-          </div>
-          <button className="btn-icon" onClick={onClose}><X size={18} /></button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="submission-task-banner">
-            <span className="text-muted text-xs">Reviewing submission for:</span>
-            <div className="task-title-highlight">{task.title}</div>
-            {latestSubmission && (
-              <div className="submission-notes-quote mt-2">
-                <span className="text-xs text-muted">
-                  Submitted by {latestSubmission.submitter?.firstName}:
-                </span>
-                <p>"{latestSubmission.notes}"</p>
-              </div>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Review Verdict *</label>
-            <div className="verdict-options-row">
-              <label className={`verdict-btn ${verdict === 'APPROVED' ? 'active-approved' : ''}`}>
-                <input
-                  type="radio"
-                  name="verdict"
-                  value="APPROVED"
-                  checked={verdict === 'APPROVED'}
-                  onChange={() => setVerdict('APPROVED')}
-                />
-                <span>✅ Approve & Mark Done</span>
-              </label>
-
-              <label className={`verdict-btn ${verdict === 'NEEDS_REVISION' ? 'active-revision' : ''}`}>
-                <input
-                  type="radio"
-                  name="verdict"
-                  value="NEEDS_REVISION"
-                  checked={verdict === 'NEEDS_REVISION'}
-                  onChange={() => setVerdict('NEEDS_REVISION')}
-                />
-                <span>🔄 Request Revision</span>
-              </label>
+            <div className="auto-announcement-hint">
+              <Sparkles size={13} color="#f59e0b" />
+              <span>
+                Students will see an auto-announcement with a direct link to this assignment to submit
+                work.
+              </span>
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Instructor Feedback Comment *</label>
-            <textarea
-              required
-              className="input-field textarea-field"
-              rows={4}
-              placeholder="Provide constructive feedback, praise, or specific revision requests..."
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
+          <div className="modal-footer">
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Publishing...' : 'Publish Assignment'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ─── 4. CREATE ANNOUNCEMENT MODAL ─────────────────────────────
+interface CreateAnnouncementModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: any) => Promise<void>;
+  activeDept: DepartmentMemberContext;
+  isAdmin: boolean;
+}
+
+export const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  activeDept,
+  isAdmin,
+}) => {
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [priority, setPriority] = useState<'NORMAL' | 'IMPORTANT' | 'URGENT'>('NORMAL');
+  const [isPinned, setIsPinned] = useState(false);
+  const [isGlobal, setIsGlobal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !content.trim()) {
+      setError('Title and content are required.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await onSubmit({
+        title: title.trim(),
+        content: content.trim(),
+        priority,
+        isPinned,
+        isGlobal: isAdmin ? isGlobal : false,
+      });
+      onClose();
+      setTitle('');
+      setContent('');
+      setPriority('NORMAL');
+      setIsPinned(false);
+      setIsGlobal(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to post announcement');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-dialog">
+        <div className="modal-header">
+          <div className="modal-title-group">
+            <Megaphone size={18} color="#f59e0b" />
+            <h3 className="modal-title">Broadcast Announcement</h3>
+          </div>
+          <button className="btn-close-modal" onClick={onClose} disabled={isSubmitting}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            {error && <div className="form-error-banner">{error}</div>}
+
+            <div className="form-field">
+              <label className="field-label">Announcement Title *</label>
+              <input
+                type="text"
+                placeholder="e.g., Mid-Cohort Hackathon Registration"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                className="input-clean"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="field-label">Announcement Content *</label>
+              <textarea
+                rows={4}
+                placeholder="Write the full announcement broadcast message here..."
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                required
+                className="textarea-clean"
+              />
+            </div>
+
+            <div className="form-grid-2">
+              <div className="form-field">
+                <label className="field-label">Priority Level</label>
+                <select
+                  value={priority}
+                  onChange={(e: any) => setPriority(e.target.value)}
+                  className="input-clean"
+                >
+                  <option value="NORMAL">Normal</option>
+                  <option value="IMPORTANT">Important</option>
+                  <option value="URGENT">Urgent</option>
+                </select>
+              </div>
+
+              <div className="form-field-checkbox-col">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={isPinned}
+                    onChange={(e) => setIsPinned(e.target.checked)}
+                  />
+                  <span>Pin to Top of Feed</span>
+                </label>
+
+                {isAdmin && (
+                  <label className="checkbox-label mt-1">
+                    <input
+                      type="checkbox"
+                      checked={isGlobal}
+                      onChange={(e) => setIsGlobal(e.target.checked)}
+                    />
+                    <span>🌐 Broadcast to All Departments</span>
+                  </label>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={loading || !comment}>
-              {loading ? 'Submitting...' : 'Submit Evaluation & Notify Intern'}
+            <button type="submit" className="btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Broadcasting...' : 'Broadcast Announcement'}
             </button>
           </div>
         </form>

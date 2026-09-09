@@ -7,6 +7,8 @@ import {
   Plus,
   Trash2,
   CalendarCheck,
+  Bell,
+  Sparkles,
 } from 'lucide-react';
 import { ClassSchedule, DepartmentMemberContext } from '../types';
 
@@ -34,25 +36,30 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       {/* Header */}
       <div className="view-header">
         <div>
-          <h1 className="view-title">Class Schedule & Training Sessions</h1>
+          <div className="view-pretitle">FLEXIBLE TIMETABLE</div>
+          <h1 className="view-title">Class Scheduler & Sessions</h1>
           <p className="view-subtitle">
-            Live lectures, lab walkthroughs, and mentor workshops for {activeDept.name}.
+            {isTutorOrAdmin
+              ? `Dynamic scheduling for ${activeDept.name}. Schedule extra workshops, labs, or lectures beyond the static timetable.`
+              : `Upcoming training sessions, lectures, and hands-on labs for ${activeDept.name}.`}
           </p>
         </div>
         {isTutorOrAdmin && (
           <button className="btn-primary" onClick={onOpenScheduleModal}>
             <Plus size={16} />
-            <span>Schedule New Class</span>
+            <span>Schedule Extra Class</span>
           </button>
         )}
       </div>
 
       {schedules.length === 0 ? (
-        <div className="empty-state-card glass-panel">
+        <div className="empty-state-card">
           <Calendar size={48} className="text-muted" />
-          <h3>No classes scheduled</h3>
+          <h3>No classes scheduled yet</h3>
           <p className="text-muted">
-            Tutors can schedule upcoming training sessions and hands-on labs.
+            {isTutorOrAdmin
+              ? 'Click below to schedule an extra class or lecture session for your interns.'
+              : 'Your tutors will schedule upcoming class sessions and labs here.'}
           </p>
           {isTutorOrAdmin && (
             <button className="btn-primary mt-4" onClick={onOpenScheduleModal}>
@@ -66,12 +73,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           {/* Upcoming Classes */}
           <div className="schedule-section">
             <h2 className="section-subtitle">
-              <CalendarCheck size={18} className="text-accent" />
+              <CalendarCheck size={18} color="#4f46e5" />
               <span>Upcoming Class Sessions ({upcoming.length})</span>
             </h2>
 
             {upcoming.length === 0 ? (
-              <div className="empty-card glass-panel">
+              <div className="empty-card">
                 <p className="text-muted">No upcoming sessions. Check back soon.</p>
               </div>
             ) : (
@@ -80,8 +87,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   const start = new Date(item.startTime);
                   const end = new Date(item.endTime);
                   return (
-                    <div key={item.id} className="schedule-card glass-panel glass-panel-hover">
-                      <div className="schedule-card-date-box" style={{ borderColor: activeDept.colorHex }}>
+                    <div key={item.id} className="schedule-card">
+                      <div
+                        className="schedule-card-date-box"
+                        style={{ borderColor: activeDept.colorHex || '#4f46e5' }}
+                      >
                         <span className="sched-month">
                           {start.toLocaleString('default', { month: 'short' }).toUpperCase()}
                         </span>
@@ -100,39 +110,55 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                               {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </span>
+
                           <span className="schedule-location-badge">
                             <MapPin size={13} />
                             <span>{item.location}</span>
                           </span>
-                          {isTutorOrAdmin && (
-                            <button
-                              className="btn-icon btn-icon-danger ml-auto"
-                              onClick={() => onDeleteSchedule(item.id)}
-                              title="Cancel class"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          )}
+
+                          <span className="reminder-active-badge" title="Automated reminder dispatched 1 day before class">
+                            <Bell size={12} />
+                            <span>1-Day Reminder Active</span>
+                          </span>
                         </div>
 
                         <h3 className="schedule-item-title">{item.title}</h3>
-                        <p className="schedule-item-desc">{item.description}</p>
+                        {item.description && (
+                          <p className="schedule-item-desc">{item.description}</p>
+                        )}
 
                         <div className="schedule-footer-row">
-                          <span className="schedule-instructor-tag">
-                            Instructor: {item.scheduler?.firstName} {item.scheduler?.lastName}
-                          </span>
-                          {item.meetingLink && (
-                            <a
-                              href={item.meetingLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn-primary btn-sm"
-                            >
-                              <Video size={14} />
-                              <span>Join Virtual Room</span>
-                            </a>
-                          )}
+                          <div className="schedule-scheduler-info">
+                            <span>Scheduled by: </span>
+                            <strong>
+                              {item.scheduler?.firstName} {item.scheduler?.lastName}
+                            </strong>
+                            <span className="scheduler-role-tag">TUTOR</span>
+                          </div>
+
+                          <div className="schedule-action-btns">
+                            {item.meetingLink && (
+                              <a
+                                href={item.meetingLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn-join-meeting"
+                              >
+                                <Video size={14} />
+                                <span>Join Virtual Meeting</span>
+                              </a>
+                            )}
+
+                            {isTutorOrAdmin && (
+                              <button
+                                className="btn-icon-danger"
+                                onClick={() => onDeleteSchedule(item.id)}
+                                title="Delete Class"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -142,29 +168,32 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
             )}
           </div>
 
-          {/* Past Classes */}
+          {/* Past Sessions */}
           {past.length > 0 && (
-            <div className="schedule-section mt-8">
+            <div className="schedule-section past-section">
               <h2 className="section-subtitle text-muted">
-                <span>Past Sessions Archive ({past.length})</span>
+                <span>Completed Sessions ({past.length})</span>
               </h2>
-              <div className="schedule-cards-list past-list">
-                {past.map((item) => (
-                  <div key={item.id} className="schedule-card glass-panel opacity-70">
-                    <div className="schedule-card-body">
-                      <div className="schedule-meta-row">
-                        <span className="text-muted text-xs">
-                          {new Date(item.startTime).toLocaleDateString()}
-                        </span>
-                        <span className="schedule-location-badge text-xs">
-                          {item.location}
-                        </span>
+              <div className="schedule-cards-list">
+                {past.map((item) => {
+                  const start = new Date(item.startTime);
+                  return (
+                    <div key={item.id} className="schedule-card past-card">
+                      <div className="schedule-card-date-box past-date-box">
+                        <span className="sched-month">{start.toLocaleString('default', { month: 'short' })}</span>
+                        <span className="sched-day">{start.getDate()}</span>
                       </div>
-                      <h4 className="schedule-item-title text-muted">{item.title}</h4>
-                      <p className="schedule-item-desc text-muted text-xs">{item.description}</p>
+                      <div className="schedule-card-body">
+                        <h4 className="schedule-past-title">{item.title}</h4>
+                        <div className="schedule-past-meta">
+                          <span>{item.location}</span>
+                          <span>•</span>
+                          <span>{start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

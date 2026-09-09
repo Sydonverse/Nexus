@@ -4,8 +4,7 @@ import jwt from 'jsonwebtoken';
 import prisma from '../config/prisma';
 import { AuthRequest } from '../middleware/auth';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'nexus_jwt_secret_dev_key_2026_secure';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'nexus_jwt_refresh_dev_key_2026_secure';
+const JWT_SECRET = process.env.JWT_SECRET || 'knowvia_jwt_secret_dev_key_2026_secure';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -17,7 +16,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     }
 
     const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: email.toLowerCase().trim() },
     });
 
     if (existingUser) {
@@ -25,36 +24,44 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
     const assignedRole = role === 'TUTOR' ? 'TUTOR' : 'INTERN';
+
+    // Must select a valid department for registration (Tutor or Intern)
+    if (!departmentSlug) {
+      res.status(400).json({ error: 'Please select your department during registration' });
+      return;
+    }
+
+    const dept = await prisma.department.findUnique({
+      where: { slug: departmentSlug.toLowerCase() },
+    });
+
+    if (!dept) {
+      res.status(404).json({ error: 'Selected department does not exist' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
 
     const newUser = await prisma.user.create({
       data: {
-        email: email.toLowerCase(),
+        email: email.toLowerCase().trim(),
         passwordHash,
-        firstName,
-        lastName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         role: assignedRole,
       },
     });
 
-    // If a department slug was provided during registration, auto-enroll or request join
-    if (departmentSlug) {
-      const dept = await prisma.department.findUnique({
-        where: { slug: departmentSlug.toLowerCase() },
-      });
-      if (dept) {
-        await prisma.departmentMember.create({
-          data: {
-            userId: newUser.id,
-            departmentId: dept.id,
-            role: assignedRole,
-            // Interns join approved by default for easy onboarding in hackathon, or PENDING if desired
-            status: 'APPROVED',
-          },
-        });
-      }
-    }
+    // Enforce single department membership
+    await prisma.departmentMember.create({
+      data: {
+        userId: newUser.id,
+        departmentId: dept.id,
+        role: assignedRole,
+        status: 'APPROVED',
+      },
+    });
 
     const token = jwt.sign({ userId: newUser.id, role: newUser.role }, JWT_SECRET, {
       expiresIn: '7d',
@@ -69,6 +76,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         firstName: newUser.firstName,
         lastName: newUser.lastName,
         role: newUser.role,
+        department: {
+          id: dept.id,
+          name: dept.name,
+          slug: dept.slug,
+          colorHex: dept.colorHex,
+          icon: dept.icon,
+        },
       },
     });
   } catch (error) {
@@ -87,13 +101,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: email.toLowerCase().trim() },
       include: {
         departmentMemberships: {
           where: { status: 'APPROVED' },
           include: {
             department: {
-              select: { id: true, name: true, slug: true, colorHex: true, icon: true },
+              select: { id: true, name: true, slug: true, colorHex: true, icon: true, description: true },
             },
           },
         },
@@ -119,7 +133,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (user.role === 'ADMIN') {
       const allDepts = await prisma.department.findMany({
         where: { isActive: true },
-        select: { id: true, name: true, slug: true, colorHex: true, icon: true },
+        select: { id: true, name: true, slug: true, colorHex: true, icon: true, description: true },
         orderBy: { name: 'asc' },
       });
       userDepartments = allDepts.map((d) => ({
@@ -166,7 +180,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
           where: { status: 'APPROVED' },
           include: {
             department: {
-              select: { id: true, name: true, slug: true, colorHex: true, icon: true },
+              select: { id: true, name: true, slug: true, colorHex: true, icon: true, description: true },
             },
           },
         },
@@ -182,7 +196,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
     if (user.role === 'ADMIN') {
       const allDepts = await prisma.department.findMany({
         where: { isActive: true },
-        select: { id: true, name: true, slug: true, colorHex: true, icon: true },
+        select: { id: true, name: true, slug: true, colorHex: true, icon: true, description: true },
         orderBy: { name: 'asc' },
       });
       userDepartments = allDepts.map((d) => ({

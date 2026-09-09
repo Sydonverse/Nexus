@@ -1,31 +1,30 @@
 import React from 'react';
 import {
   LayoutDashboard,
-  FolderGit2,
-  KanbanSquare,
   Calendar,
+  BookOpen,
+  ClipboardCheck,
   Megaphone,
   MessageSquare,
-  Users,
   ShieldCheck,
+  GraduationCap,
 } from 'lucide-react';
 import { DepartmentMemberContext, User } from '../types';
 
 export type ActiveTab =
   | 'dashboard'
-  | 'resources'
-  | 'projects'
   | 'schedule'
+  | 'materials'
+  | 'assignments'
   | 'announcements'
-  | 'chat'
-  | 'members';
+  | 'chat';
 
 interface SidebarProps {
   activeTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
   activeDept: DepartmentMemberContext | null;
-  unreadCount: number;
   currentUser?: User | null;
+  unreadCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -34,35 +33,88 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeDept,
   currentUser,
 }) => {
+  const isTutorOrAdmin = currentUser?.role === 'TUTOR' || currentUser?.role === 'ADMIN';
+
+  // Base navigation items
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'resources', label: 'Resources & Materials', icon: FolderGit2 },
-    { id: 'projects', label: 'Projects & Progress', icon: KanbanSquare },
-    { id: 'schedule', label: 'Class Scheduler', icon: Calendar },
-    { id: 'announcements', label: 'Announcements', icon: Megaphone },
-    { id: 'chat', label: 'Department Chat', icon: MessageSquare },
-    { id: 'members', label: 'Members Directory', icon: Users },
+    {
+      id: 'dashboard' as ActiveTab,
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+      description: 'Overview & schedules',
+    },
+    {
+      id: 'schedule' as ActiveTab,
+      label: 'Class Scheduler',
+      icon: Calendar,
+      description: isTutorOrAdmin ? 'Flexible class timetable' : 'Class timetable',
+    },
+    {
+      id: 'materials' as ActiveTab,
+      label: isTutorOrAdmin ? 'Learning Materials & Files' : 'Learning Materials',
+      icon: BookOpen,
+      description: isTutorOrAdmin ? 'Share educational files' : 'Curated study materials',
+    },
+    {
+      id: 'assignments' as ActiveTab,
+      label: 'Assignment Management',
+      icon: ClipboardCheck,
+      description: isTutorOrAdmin ? 'Create & review work' : 'Submit & track progress',
+    },
   ];
+
+  // Announcements tab is only shown for Tutors and Admin in the sidebar
+  // (for interns/students, it's the Bell Icon in the top bar)
+  if (isTutorOrAdmin) {
+    navItems.push({
+      id: 'announcements' as ActiveTab,
+      label: 'Announcements',
+      icon: Megaphone,
+      description: 'Broadcast updates',
+    });
+  }
+
+  // Chat is available for all
+  navItems.push({
+    id: 'chat' as ActiveTab,
+    label: 'Department Chat',
+    icon: MessageSquare,
+    description: 'Real-time discussion',
+  });
 
   const roleLabel =
     currentUser?.role === 'ADMIN'
-      ? 'ADMIN (Global Oversight)'
-      : activeDept?.memberRole || 'INTERN';
+      ? 'Administrator'
+      : currentUser?.role === 'TUTOR'
+      ? 'Department Tutor'
+      : 'Intern / Student';
 
   return (
     <aside className="sidebar-container">
-      <div className="sidebar-dept-card" style={{ borderColor: `${activeDept?.colorHex || '#6366f1'}33` }}>
+      {/* Active Department Workspace Banner */}
+      <div
+        className="sidebar-dept-card"
+        style={{
+          borderColor: `${activeDept?.colorHex || '#4f46e5'}30`,
+          background: `${activeDept?.colorHex || '#4f46e5'}08`,
+        }}
+      >
         <div className="dept-card-top">
           <div className="status-online-dot"></div>
           <span className="dept-space-label">DEPARTMENT WORKSPACE</span>
         </div>
-        <div className="dept-card-title">{activeDept?.name || 'Hub Central'}</div>
+        <div className="dept-card-title">{activeDept?.name || 'Department'}</div>
         <div className="dept-badge-role">
-          <ShieldCheck size={12} />
-          <span>Access: {roleLabel}</span>
+          {currentUser?.role === 'ADMIN' ? (
+            <ShieldCheck size={13} color="#4f46e5" />
+          ) : (
+            <GraduationCap size={13} color="#10b981" />
+          )}
+          <span>{roleLabel}</span>
         </div>
       </div>
 
+      {/* Navigation Links */}
       <nav className="sidebar-nav">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -71,34 +123,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={item.id}
               className={`nav-link ${isActive ? 'active' : ''}`}
-              onClick={() => onSelectTab(item.id as ActiveTab)}
+              onClick={() => onSelectTab(item.id)}
               style={
                 isActive
                   ? {
-                      borderColor: activeDept?.colorHex || '#6366f1',
-                      background: `linear-gradient(90deg, ${activeDept?.colorHex || '#6366f1'}22, transparent)`,
+                      borderColor: activeDept?.colorHex || '#4f46e5',
+                      background: `${activeDept?.colorHex || '#4f46e5'}10`,
                       color: 'var(--text-primary)',
                     }
                   : {}
               }
             >
-              <Icon
-                size={18}
-                style={isActive ? { color: activeDept?.colorHex || '#6366f1' } : {}}
-              />
-              <span className="nav-text">{item.label}</span>
-              {isActive && <div className="active-indicator-bar" style={{ background: activeDept?.colorHex }} />}
+              <div
+                className="nav-icon-box"
+                style={
+                  isActive
+                    ? {
+                        background: `${activeDept?.colorHex || '#4f46e5'}20`,
+                        color: activeDept?.colorHex || '#4f46e5',
+                      }
+                    : {}
+                }
+              >
+                <Icon size={18} />
+              </div>
+              <div className="nav-text-col">
+                <span className="nav-text">{item.label}</span>
+                <span className="nav-subtext">{item.description}</span>
+              </div>
+              {isActive && (
+                <div
+                  className="active-indicator-bar"
+                  style={{ background: activeDept?.colorHex || '#4f46e5' }}
+                />
+              )}
             </button>
           );
         })}
       </nav>
 
+      {/* PWA Footer Badge */}
       <div className="sidebar-footer">
         <div className="pwa-badge">
           <div className="pwa-dot"></div>
           <div>
-            <div className="pwa-title">Nexus PWA v1.0</div>
-            <div className="pwa-sub">Offline Ready & Secure</div>
+            <div className="pwa-title">Knowvia PWA</div>
+            <div className="pwa-sub">Knowledge Repository</div>
           </div>
         </div>
       </div>

@@ -1,11 +1,18 @@
 import { Response } from 'express';
 import prisma from '../config/prisma';
-import { DepartmentRequest } from '../middleware/departmentGuard';
-import { sendDepartmentPushNotification } from '../utils/push';
+import { AuthRequest } from '../middleware/auth';
+import { createAutoAnnouncement } from '../services/announcement.service';
+import { getIO } from '../socket';
 
-export const listSchedules = async (req: DepartmentRequest, res: Response): Promise<void> => {
+export const listSchedules = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const dept = req.department;
+    const { slug } = req.params;
+
+    const dept = await prisma.department.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+
     if (!dept) {
       res.status(404).json({ error: 'Department not found' });
       return;
@@ -15,7 +22,7 @@ export const listSchedules = async (req: DepartmentRequest, res: Response): Prom
       where: { departmentId: dept.id },
       include: {
         scheduler: {
-          select: { id: true, firstName: true, lastName: true, role: true },
+          select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
         },
       },
       orderBy: { startTime: 'asc' },
@@ -28,23 +35,35 @@ export const listSchedules = async (req: DepartmentRequest, res: Response): Prom
   }
 };
 
-export const createSchedule = async (req: DepartmentRequest, res: Response): Promise<void> => {
+export const createSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const dept = req.department;
-    const user = req.user;
-    if (!dept || !user) {
-      res.status(401).json({ error: 'Unauthorized or missing department' });
-      return;
-    }
-
-    if (user.role !== 'ADMIN' && req.departmentMemberRole !== 'TUTOR') {
-      res.status(403).json({ error: 'Only tutors or admins can schedule department classes' });
-      return;
-    }
-
+    const { slug } = req.params;
     const { title, description, startTime, endTime, location, meetingLink } = req.body;
+    const user = req.user;
+
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    // Role check: Only tutors and admin can schedule classes
+    if (user.role !== 'TUTOR' && user.role !== 'ADMIN') {
+      res.status(403).json({ error: 'Forbidden: Only tutors and administrators can schedule classes' });
+      return;
+    }
+
     if (!title || !startTime || !endTime) {
-      res.status(400).json({ error: 'Title, startTime, and endTime are required' });
+      res.status(400).json({ error: 'Title, start time, and end time are required' });
+      return;
+    }
+
+    const dept = await prisma.department.findUnique({
+      where: { slug },
+      select: { id: true, name: true, slug: true },
+    });
+
+    if (!dept) {
+      res.status(404).json({ error: 'Department not found' });
       return;
     }
 
@@ -52,57 +71,151 @@ export const createSchedule = async (req: DepartmentRequest, res: Response): Pro
       data: {
         departmentId: dept.id,
         scheduledById: user.id,
-        title,
-        description: description || '',
+        title: title.trim(),
+        description: description ? description.trim() : '',
         startTime: new Date(startTime),
         endTime: new Date(endTime),
-        location: location || 'Tech Hub Main Hall',
-        meetingLink: meetingLink || null,
+        location: location ? location.trim() : 'Online / Hub Room',
+        meetingLink: meetingLink ? meetingLink.trim() : null,
       },
       include: {
-        scheduler: { select: { firstName: true, lastName: true } },
+        scheduler: {
+          select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
+        },
       },
     });
 
-    const dateStr = new Date(startTime).toLocaleDateString(undefined, {
+    // Real-time broadcast to department room
+    const io = getIO();
+    if (io) {
+      io.to(`dept:${dept.slug}`).emit('schedule:new', schedule);
+    }
+
+    // Auto-create Announcement & dispatch push notification
+    const formattedDate = new Date(schedule.startTime).toLocaleString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit',
     });
 
-    sendDepartmentPushNotification({
+    await createAutoAnnouncement({
+      authorId: user.id,
       departmentId: dept.id,
-      title: `🗓️ Class Scheduled: ${title}`,
-      body: `Class session scheduled for ${dateStr} at ${location || 'Tech Hub'}`,
-      actionUrl: `/departments/${dept.slug}/schedule`,
-      type: 'CLASS_SCHEDULE',
-      excludeUserId: user.id,
-    }).catch((err) => console.error('Push error:', err));
+      sourceType: 'CLASS_SCHEDULE',
+      sourceId: schedule.id,
+      title: `📅 Class Scheduled: ${schedule.title}`,
+      content: `Session set for ${formattedDate} (${schedule.location}). Please mark your calendar.`,
+      priority: 'IMPORTANT',
+      actionUrl: '/schedule',
+    });
 
     res.status(201).json({ schedule });
   } catch (error) {
     console.error('Create schedule error:', error);
-    res.status(500).json({ error: 'Failed to create schedule' });
+    res.status(500).json({ error: 'Failed to create class schedule' });
   }
 };
 
-export const deleteSchedule = async (req: DepartmentRequest, res: Response): Promise<void> => {
+export const updateSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const { title, description, startTime, endTime, location, meetingLink } = req.body;
     const user = req.user;
+
     if (!user) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
 
-    if (user.role !== 'ADMIN' && req.departmentMemberRole !== 'TUTOR') {
-      res.status(403).json({ error: 'Permission denied to delete schedule' });
+    if (user.role !== 'TUTOR' && user.role !== 'ADMIN') {
+      res.status(403).json({ error: 'Forbidden: Only tutors and administrators can edit class schedules' });
+      return;
+    }
+
+    const existing = await prisma.classSchedule.findUnique({
+      where: { id },
+      include: { department: { select: { slug: true } } },
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: 'Schedule not found' });
+      return;
+    }
+
+    // Non-admin tutors can only edit their own scheduled classes
+    if (user.role !== 'ADMIN' && existing.scheduledById !== user.id) {
+      res.status(403).json({ error: 'Forbidden: You can only edit your own scheduled classes' });
+      return;
+    }
+
+    const updated = await prisma.classSchedule.update({
+      where: { id },
+      data: {
+        ...(title ? { title: title.trim() } : {}),
+        ...(description !== undefined ? { description: description.trim() } : {}),
+        ...(startTime ? { startTime: new Date(startTime) } : {}),
+        ...(endTime ? { endTime: new Date(endTime) } : {}),
+        ...(location !== undefined ? { location: location.trim() } : {}),
+        ...(meetingLink !== undefined ? { meetingLink: meetingLink ? meetingLink.trim() : null } : {}),
+      },
+      include: {
+        scheduler: {
+          select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
+        },
+      },
+    });
+
+    const io = getIO();
+    if (io) {
+      io.to(`dept:${existing.department.slug}`).emit('schedule:updated', updated);
+    }
+
+    res.json({ schedule: updated });
+  } catch (error) {
+    console.error('Update schedule error:', error);
+    res.status(500).json({ error: 'Failed to update schedule' });
+  }
+};
+
+export const deleteSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (user.role !== 'TUTOR' && user.role !== 'ADMIN') {
+      res.status(403).json({ error: 'Forbidden: Only tutors and administrators can delete class schedules' });
+      return;
+    }
+
+    const schedule = await prisma.classSchedule.findUnique({
+      where: { id },
+      include: { department: { select: { slug: true } } },
+    });
+
+    if (!schedule) {
+      res.status(404).json({ error: 'Schedule not found' });
+      return;
+    }
+
+    if (user.role !== 'ADMIN' && schedule.scheduledById !== user.id) {
+      res.status(403).json({ error: 'Forbidden: You can only delete classes you scheduled' });
       return;
     }
 
     await prisma.classSchedule.delete({ where: { id } });
+
+    const io = getIO();
+    if (io) {
+      io.to(`dept:${schedule.department.slug}`).emit('schedule:deleted', { id });
+    }
+
     res.json({ message: 'Schedule deleted successfully' });
   } catch (error) {
     console.error('Delete schedule error:', error);

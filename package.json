@@ -1,7 +1,7 @@
 {
-  "name": "nexus-monorepo",
+  "name": "knowvia-monorepo",
   "version": "1.0.0",
-  "description": "Nexus — Centralized Progressive Web App for Tech Hub Resource Sharing, Project Management, and Collaboration",
+  "description": "Knowvia — Progressive Web App Knowledge Repository and Learning Management Platform",
   "private": true,
   "scripts": {
     "dev": "npm run dev:all",

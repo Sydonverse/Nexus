@@ -4,20 +4,16 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting database seeding for Nexus...');
+  console.log('🌱 Starting database seeding for Knowvia...');
 
-  // 1. Clean existing records (in proper foreign-key order)
-  await prisma.submissionFeedback.deleteMany();
-  await prisma.taskSubmission.deleteMany();
-  await prisma.taskAssignment.deleteMany();
-  await prisma.task.deleteMany();
-  await prisma.projectGroupMember.deleteMany();
-  await prisma.projectGroup.deleteMany();
-  await prisma.project.deleteMany();
+  // 1. Clean existing records in foreign-key safe order
+  await prisma.submissionReview.deleteMany();
+  await prisma.submission.deleteMany();
+  await prisma.assignment.deleteMany();
   await prisma.message.deleteMany();
   await prisma.classSchedule.deleteMany();
   await prisma.announcement.deleteMany();
-  await prisma.resource.deleteMany();
+  await prisma.material.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.pushSubscription.deleteMany();
   await prisma.departmentMember.deleteMany();
@@ -34,17 +30,7 @@ async function main() {
       slug: 'cybersecurity',
       description: 'Defensive and offensive security, network intrusion detection, forensics, and ethical hacking.',
       icon: 'shield',
-      colorHex: '#ef4444',
-    },
-  });
-
-  const dataDept = await prisma.department.create({
-    data: {
-      name: 'Data Analysis',
-      slug: 'data-analysis',
-      description: 'Data wrangling, exploratory analysis, statistical modeling, machine learning, and BI dashboards.',
-      icon: 'bar-chart-2',
-      colorHex: '#3b82f6',
+      colorHex: '#6366f1',
     },
   });
 
@@ -52,8 +38,18 @@ async function main() {
     data: {
       name: 'Web Development',
       slug: 'web-dev',
-      description: 'Modern frontend, scalable backend architectures, cloud deployments, and Progressive Web Apps.',
+      description: 'Modern frontend engineering, scalable APIs, cloud deployments, and Progressive Web Apps.',
       icon: 'globe',
+      colorHex: '#0ea5e9',
+    },
+  });
+
+  const dataDept = await prisma.department.create({
+    data: {
+      name: 'Data Analysis',
+      slug: 'data-analysis',
+      description: 'Data wrangling, statistical modeling, machine learning, and business intelligence.',
+      icon: 'bar-chart-2',
       colorHex: '#10b981',
     },
   });
@@ -62,9 +58,9 @@ async function main() {
     data: {
       name: '3D Modelling',
       slug: '3d-modelling',
-      description: '3D asset creation, environment design, rigging, and animation for games and real-time visualization.',
+      description: '3D asset creation, environment design, rigging, and animation for game pipelines.',
       icon: 'box',
-      colorHex: '#a855f7',
+      colorHex: '#8b5cf6',
     },
   });
 
@@ -72,17 +68,17 @@ async function main() {
     data: {
       name: 'Graphic Design',
       slug: 'graphic-design',
-      description: 'Brand identity systems, UI/UX interaction design, digital illustration, and visual communication.',
+      description: 'Brand identity systems, typography, UI/UX interaction design, and visual communication.',
       icon: 'palette',
       colorHex: '#f59e0b',
     },
   });
 
-  // 3. Create Users
-  console.log('Creating hub users...');
+  // 3. Create Admin & Hub Users
+  console.log('Creating Knowvia users...');
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@nexus.hub',
+      email: 'admin@knowvia.internal',
       passwordHash: defaultPasswordHash,
       firstName: 'Sarah',
       lastName: 'Director',
@@ -91,10 +87,10 @@ async function main() {
     },
   });
 
-  // Cybersecurity Tutor & Interns
+  // Tutors
   const cyberTutor = await prisma.user.create({
     data: {
-      email: 'cyber.tutor@nexus.hub',
+      email: 'cyber.tutor@knowvia.internal',
       passwordHash: defaultPasswordHash,
       firstName: 'Alex',
       lastName: 'Vance',
@@ -103,9 +99,21 @@ async function main() {
     },
   });
 
+  const webTutor = await prisma.user.create({
+    data: {
+      email: 'web.tutor@knowvia.internal',
+      passwordHash: defaultPasswordHash,
+      firstName: 'Marcus',
+      lastName: 'Chen',
+      role: 'TUTOR',
+      avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150',
+    },
+  });
+
+  // Interns
   const cyberIntern1 = await prisma.user.create({
     data: {
-      email: 'david.cyber@nexus.hub',
+      email: 'david.cyber@knowvia.internal',
       passwordHash: defaultPasswordHash,
       firstName: 'David',
       lastName: 'Kim',
@@ -116,7 +124,7 @@ async function main() {
 
   const cyberIntern2 = await prisma.user.create({
     data: {
-      email: 'maya.cyber@nexus.hub',
+      email: 'maya.cyber@knowvia.internal',
       passwordHash: defaultPasswordHash,
       firstName: 'Maya',
       lastName: 'Patel',
@@ -125,147 +133,58 @@ async function main() {
     },
   });
 
-  // Data Analysis Tutor & Intern
-  const dataTutor = await prisma.user.create({
+  const webIntern = await prisma.user.create({
     data: {
-      email: 'data.tutor@nexus.hub',
+      email: 'jordan.web@knowvia.internal',
       passwordHash: defaultPasswordHash,
-      firstName: 'Evelyn',
-      lastName: 'Reed',
-      role: 'TUTOR',
-      avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-    },
-  });
-
-  const dataIntern = await prisma.user.create({
-    data: {
-      email: 'sam.data@nexus.hub',
-      passwordHash: defaultPasswordHash,
-      firstName: 'Sam',
-      lastName: 'Taylor',
+      firstName: 'Jordan',
+      lastName: 'Lee',
       role: 'INTERN',
       avatarUrl: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150',
     },
   });
 
-  // Web Dev Tutor
-  const webTutor = await prisma.user.create({
-    data: {
-      email: 'web.tutor@nexus.hub',
-      passwordHash: defaultPasswordHash,
-      firstName: 'Marcus',
-      lastName: 'Chen',
-      role: 'TUTOR',
-      avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150',
-    },
-  });
-
-  // 4. Enroll Members into Departments
+  // 4. Enroll Single Department Memberships
   console.log('Enrolling department memberships...');
-  // Cyber enrollments
   await prisma.departmentMember.createMany({
     data: [
       { userId: cyberTutor.id, departmentId: cyberDept.id, role: 'TUTOR', status: 'APPROVED' },
       { userId: cyberIntern1.id, departmentId: cyberDept.id, role: 'INTERN', status: 'APPROVED' },
       { userId: cyberIntern2.id, departmentId: cyberDept.id, role: 'INTERN', status: 'APPROVED' },
-      { userId: dataTutor.id, departmentId: dataDept.id, role: 'TUTOR', status: 'APPROVED' },
-      { userId: dataIntern.id, departmentId: dataDept.id, role: 'INTERN', status: 'APPROVED' },
       { userId: webTutor.id, departmentId: webDept.id, role: 'TUTOR', status: 'APPROVED' },
+      { userId: webIntern.id, departmentId: webDept.id, role: 'INTERN', status: 'APPROVED' },
     ],
   });
 
-  // 5. Seed Resources for Cybersecurity
-  console.log('Seeding learning resources...');
-  await prisma.resource.createMany({
-    data: [
-      {
-        departmentId: cyberDept.id,
-        uploadedById: cyberTutor.id,
-        title: 'OWASP Top 10 Web Security Guide',
-        description: 'Comprehensive walkthrough of injection vulnerabilities, broken authentication, and mitigation strategies.',
-        fileUrl: '/uploads/sample-owasp-guide.pdf',
-        fileName: 'OWASP_Top_10_2026.pdf',
-        fileMimeType: 'application/pdf',
-        fileSizeBytes: 2450000,
-        category: 'REFERENCE',
-        tags: 'security,owasp,web-security',
-        isPinned: true,
-      },
-      {
-        departmentId: cyberDept.id,
-        uploadedById: cyberTutor.id,
-        title: 'Network Penetration Testing Lab Script',
-        description: 'Bash automation script for network host discovery, port enumeration, and service banner grabbing.',
-        fileUrl: '/uploads/sample-nmap-script.sh',
-        fileName: 'recon_scan_suite.sh',
-        fileMimeType: 'text/x-shellscript',
-        fileSizeBytes: 48200,
-        category: 'TOOL',
-        tags: 'nmap,recon,script',
-        isPinned: false,
-      },
-      {
-        departmentId: cyberDept.id,
-        uploadedById: cyberTutor.id,
-        title: 'Wireshark Packet Analysis Deep-Dive',
-        description: 'Practice PCAP capture files showcasing TCP handshakes, TLS negotiation, and suspicious beaconing traffic.',
-        fileUrl: '/uploads/sample-traffic.pcap',
-        fileName: 'lab_traffic_analysis.pcap',
-        fileMimeType: 'application/vnd.tcpdump.pcap',
-        fileSizeBytes: 15400000,
-        category: 'EXERCISE',
-        tags: 'wireshark,packet-analysis,forensics',
-        isPinned: false,
-      },
-      // Data Analysis Resource
-      {
-        departmentId: dataDept.id,
-        uploadedById: dataTutor.id,
-        title: 'Pandas & NumPy Performance Optimization Guide',
-        description: 'Vectorization patterns, memory reduction techniques, and chunking large datasets.',
-        fileUrl: '/uploads/sample-pandas-guide.pdf',
-        fileName: 'Data_Wrangling_Mastery.pdf',
-        fileMimeType: 'application/pdf',
-        fileSizeBytes: 3100000,
-        category: 'TUTORIAL',
-        tags: 'python,pandas,numpy',
-        isPinned: true,
-      },
-    ],
+  // 5. Seed Learning Materials (Tutors share files)
+  console.log('Seeding learning materials...');
+  const material1 = await prisma.material.create({
+    data: {
+      departmentId: cyberDept.id,
+      uploadedById: cyberTutor.id,
+      title: 'OWASP Top 10 Security Architecture Guide',
+      description: 'Comprehensive mitigation reference for injection attacks, broken auth, and cryptographic failures.',
+      fileName: 'OWASP_Security_Guide_2026.pdf',
+      fileUrl: '/uploads/sample-owasp-guide.pdf',
+      fileMimeType: 'application/pdf',
+      fileSizeBytes: 2450000,
+    },
   });
 
-  // 6. Seed Announcements
-  console.log('Seeding announcements...');
-  await prisma.announcement.createMany({
-    data: [
-      {
-        departmentId: cyberDept.id,
-        authorId: cyberTutor.id,
-        title: 'Mid-Cohort Capture The Flag (CTF) Challenge Announced!',
-        content: 'Get your tools ready! Next Friday at 2:00 PM we are hosting a 4-hour live CTF covering web exploits, reverse engineering, and cryptography. Top teams receive certifications.',
-        priority: 'URGENT',
-        isPinned: true,
-      },
-      {
-        departmentId: cyberDept.id,
-        authorId: cyberTutor.id,
-        title: 'VPN Lab Access Credentials Updated',
-        content: 'The OpenVPN profiles for the practice penetration testing lab subnet (10.10.x.x) have been refreshed. Please download your new configuration from the shared lab drive.',
-        priority: 'IMPORTANT',
-        isPinned: false,
-      },
-      {
-        departmentId: dataDept.id,
-        authorId: dataTutor.id,
-        title: 'Kaggle Competition Registration is Now Live',
-        content: 'All data interns are required to form pairs and register for the healthcare analytics dataset competition.',
-        priority: 'NORMAL',
-        isPinned: true,
-      },
-    ],
+  const material2 = await prisma.material.create({
+    data: {
+      departmentId: cyberDept.id,
+      uploadedById: cyberTutor.id,
+      title: 'Wireshark Packet Analysis Practice Labs',
+      description: 'PCAP packet capture walkthroughs demonstrating TCP handshakes, TLS renegotiation, and suspicious beacons.',
+      fileName: 'Packet_Analysis_Walkthrough.pdf',
+      fileUrl: '/uploads/sample-traffic.pdf',
+      fileMimeType: 'application/pdf',
+      fileSizeBytes: 5200000,
+    },
   });
 
-  // 7. Seed Class Schedules
+  // 6. Seed Class Schedules
   console.log('Seeding class schedules...');
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -274,198 +193,203 @@ async function main() {
   const tomorrowEnd = new Date(tomorrow);
   tomorrowEnd.setHours(12, 0, 0, 0);
 
+  const schedule1 = await prisma.classSchedule.create({
+    data: {
+      departmentId: cyberDept.id,
+      scheduledById: cyberTutor.id,
+      title: 'Hands-on Web Application Penetration Testing Lab',
+      description: 'Exploiting SQL injection and testing Cross-Site Request Forgery mitigation on local testbeds.',
+      startTime: tomorrow,
+      endTime: tomorrowEnd,
+      location: 'Cyber Security Lab 2B & Zoom',
+      meetingLink: 'https://meet.google.com/xyz-knowvia-lab',
+      reminderSent: false,
+    },
+  });
+
   const nextWeek = new Date();
-  nextWeek.setDate(nextWeek.getDate() + 3);
+  nextWeek.setDate(nextWeek.getDate() + 4);
   nextWeek.setHours(14, 0, 0, 0);
 
   const nextWeekEnd = new Date(nextWeek);
   nextWeekEnd.setHours(16, 30, 0, 0);
 
-  await prisma.classSchedule.createMany({
-    data: [
-      {
-        departmentId: cyberDept.id,
-        scheduledById: cyberTutor.id,
-        title: 'Hands-on Web Application Penetration Testing',
-        description: 'Interactive session exploring SQL injection, cross-site scripting (XSS), and CSRF token bypasses on DVWA.',
-        startTime: tomorrow,
-        endTime: tomorrowEnd,
-        location: 'Cyber Security Lab 2B / Virtual Zoom',
-        meetingLink: 'https://nexus.hub/zoom/cyber-lab',
-      },
-      {
-        departmentId: cyberDept.id,
-        scheduledById: cyberTutor.id,
-        title: 'Incident Response & Memory Forensics Workshop',
-        description: 'Extracting artifacts and running Volatility on memory dumps from a compromised Windows server.',
-        startTime: nextWeek,
-        endTime: nextWeekEnd,
-        location: 'Tech Hub Main Auditorium',
-        meetingLink: 'https://nexus.hub/zoom/cyber-forensics',
-      },
-    ],
+  const schedule2 = await prisma.classSchedule.create({
+    data: {
+      departmentId: cyberDept.id,
+      scheduledById: cyberTutor.id,
+      title: 'Memory Forensics & Incident Response Deep-Dive',
+      description: 'Analyzing volatile RAM dumps using Volatility 3 to detect rootkits and memory injection.',
+      startTime: nextWeek,
+      endTime: nextWeekEnd,
+      location: 'Hub Auditorium Room A',
+      meetingLink: 'https://meet.google.com/xyz-knowvia-forensics',
+      reminderSent: false,
+    },
   });
 
-  // 8. Seed Projects, Groups, and Tasks for Cybersecurity
-  console.log('Seeding project management workspace...');
-  const cyberProject = await prisma.project.create({
+  // 7. Seed Assignments & Submissions
+  console.log('Seeding assignments and submissions...');
+  const assignment1 = await prisma.assignment.create({
     data: {
       departmentId: cyberDept.id,
       createdById: cyberTutor.id,
-      title: 'Enterprise Threat & Vulnerability Assessment',
-      description: 'Comprehensive simulated red-team audit of the fictitious OmniCorp infrastructure. Interns will perform OSINT, network vulnerability scanning, web security assessment, and generate an executive remediation report.',
-      status: 'IN_PROGRESS',
-      startDate: new Date(),
-      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 2 weeks
+      title: 'Web Application Vulnerability Assessment',
+      description: 'Perform a comprehensive vulnerability audit on the staging environment. Identify at least 3 distinct vulnerabilities, write up reproducible proof-of-concept steps, and provide prioritized remediation recommendations.',
+      status: 'OPEN',
+      dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days from now
+      maxFileSize: 25 * 1024 * 1024,
     },
   });
 
-  // Groups
-  const groupA = await prisma.projectGroup.create({
+  const assignment2 = await prisma.assignment.create({
     data: {
-      projectId: cyberProject.id,
-      name: 'Group Alpha (Network & Infrastructure)',
-      description: 'Focuses on subnet enumeration, port scanning, and misconfigured services.',
+      departmentId: cyberDept.id,
+      createdById: cyberTutor.id,
+      title: 'Network Traffic Analysis & Incident Report',
+      description: 'Examine the provided PCAP capture from the simulated intrusion. Identify the compromised endpoint, the attack vector utilized, and the command-and-control IP address.',
+      status: 'OPEN',
+      dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days from now
+      maxFileSize: 25 * 1024 * 1024,
     },
   });
 
-  const groupB = await prisma.projectGroup.create({
+  // David Kim submitted assignment 1 and received approval feedback
+  const submission1 = await prisma.submission.create({
     data: {
-      projectId: cyberProject.id,
-      name: 'Group Bravo (Web App & API Security)',
-      description: 'Focuses on API endpoint fuzzing, auth validation, and client-side security.',
-    },
-  });
-
-  // Assign members to groups
-  await prisma.projectGroupMember.createMany({
-    data: [
-      { groupId: groupA.id, userId: cyberIntern1.id, role: 'LEAD' },
-      { groupId: groupB.id, userId: cyberIntern2.id, role: 'LEAD' },
-    ],
-  });
-
-  // Tasks
-  const taskDone = await prisma.task.create({
-    data: {
-      projectId: cyberProject.id,
-      projectGroupId: groupA.id,
-      title: 'OSINT & Subdomain Enumeration',
-      description: 'Run Amass and Sublist3r to document all public-facing assets of OmniCorp.',
-      status: 'DONE',
-      priority: 'HIGH',
-      sortOrder: 1,
-    },
-  });
-
-  const taskReview = await prisma.task.create({
-    data: {
-      projectId: cyberProject.id,
-      projectGroupId: groupA.id,
-      title: 'External Nmap Network Vulnerability Scan',
-      description: 'Perform full SYN port scan on target range 192.168.50.0/24 with NSE vulnerability scripts.',
-      status: 'IN_REVIEW',
-      priority: 'CRITICAL',
-      sortOrder: 2,
-    },
-  });
-
-  const taskProgress = await prisma.task.create({
-    data: {
-      projectId: cyberProject.id,
-      projectGroupId: groupB.id,
-      title: 'API Authentication & JWT Testing',
-      description: 'Analyze token signing algorithms, test for secret key brute-force, and inspect role claims.',
-      status: 'IN_PROGRESS',
-      priority: 'HIGH',
-      sortOrder: 3,
-    },
-  });
-
-  const taskTodo = await prisma.task.create({
-    data: {
-      projectId: cyberProject.id,
-      projectGroupId: groupB.id,
-      title: 'Executive Remediation & Risk Matrix Report',
-      description: 'Compile CVSS v3 scores, technical evidence, and prioritized business recommendations into final PDF.',
-      status: 'TODO',
-      priority: 'MEDIUM',
-      sortOrder: 4,
-    },
-  });
-
-  // Assign tasks
-  await prisma.taskAssignment.createMany({
-    data: [
-      { taskId: taskDone.id, userId: cyberIntern1.id },
-      { taskId: taskReview.id, userId: cyberIntern1.id },
-      { taskId: taskProgress.id, userId: cyberIntern2.id },
-      { taskId: taskTodo.id, userId: cyberIntern2.id },
-    ],
-  });
-
-  // Submission for the completed task
-  const submission1 = await prisma.taskSubmission.create({
-    data: {
-      taskId: taskDone.id,
+      assignmentId: assignment1.id,
       submittedById: cyberIntern1.id,
-      notes: 'Completed full passive and active OSINT enumeration. Discovered 14 subdomains and 3 staging servers.',
-      fileUrls: JSON.stringify(['/uploads/osint_results.txt']),
+      notes: 'Completed full penetration testing audit. Uncovered SQL injection on /search endpoint and missing rate limiting on auth.',
+      fileUrl: '/uploads/david_kim_vulnerability_report.pdf',
+      fileName: 'David_Kim_Audit_Report.pdf',
+      fileSizeBytes: 1840000,
+      status: 'APPROVED',
     },
   });
 
-  await prisma.submissionFeedback.create({
+  await prisma.submissionReview.create({
     data: {
       submissionId: submission1.id,
       reviewerId: cyberTutor.id,
-      comment: 'Excellent methodology and thorough DNS reconnaissance. Approved!',
+      comment: 'Superb methodology and clear reproduction steps. Great job adhering to CVSS scoring!',
       verdict: 'APPROVED',
     },
   });
 
-  // Submission under review
-  await prisma.taskSubmission.create({
+  // Maya Patel submitted assignment 1 and needs revision
+  const submission2 = await prisma.submission.create({
     data: {
-      taskId: taskReview.id,
-      submittedById: cyberIntern1.id,
-      notes: 'Nmap XML output generated. Found port 445 open with vulnerable SMBv1 dialect and port 8080 Jenkins unauthenticated dashboard.',
-      fileUrls: JSON.stringify(['/uploads/nmap_scan_omnicorp.xml']),
+      assignmentId: assignment1.id,
+      submittedById: cyberIntern2.id,
+      notes: 'Drafted vulnerability assessment report with screenshot evidence.',
+      fileUrl: '/uploads/maya_patel_audit_draft.pdf',
+      fileName: 'Maya_Patel_Assessment_Draft.pdf',
+      fileSizeBytes: 2150000,
+      status: 'NEEDS_REVISION',
     },
   });
 
-  // 9. Seed Department Messages
-  console.log('Seeding department chat messages...');
-  await prisma.message.createMany({
-    data: [
-      {
-        departmentId: cyberDept.id,
-        senderId: cyberTutor.id,
-        content: 'Welcome everyone to the Cybersecurity department space! All lab files and announcements will live right here on Nexus.',
-      },
-      {
-        departmentId: cyberDept.id,
-        senderId: cyberIntern1.id,
-        content: 'Thanks Alex! Really excited for the penetration testing lab and the CTF next week.',
-      },
-      {
-        departmentId: cyberDept.id,
-        senderId: cyberIntern2.id,
-        content: 'Just uploaded the initial reconnaissance notes for Group Bravo. Will check the JWT endpoints this afternoon!',
-      },
-    ],
+  await prisma.submissionReview.create({
+    data: {
+      submissionId: submission2.id,
+      reviewerId: cyberTutor.id,
+      comment: 'Good initial findings, but please expand on the remediation steps for the CSRF finding before final approval.',
+      verdict: 'NEEDS_REVISION',
+    },
   });
 
-  console.log('✅ Nexus database successfully seeded with demo accounts and data!');
+  // 8. Seed Announcements with Deep-Links
+  console.log('Seeding announcements with deep links...');
+  // Global admin announcement (reflects across all departments!)
+  await prisma.announcement.create({
+    data: {
+      departmentId: null, // Global
+      authorId: admin.id,
+      title: '🌟 Welcome to Knowvia — The Central Knowledge Repository',
+      content: 'All departments are now active on Knowvia. Access your flexible class schedules, download learning materials, and manage assignments from your dashboard.',
+      priority: 'URGENT',
+      isPinned: true,
+    },
+  });
+
+  // Auto-announcements for scheduled classes, assignments, and materials
+  await prisma.announcement.create({
+    data: {
+      departmentId: cyberDept.id,
+      authorId: cyberTutor.id,
+      title: `📝 New Assignment: ${assignment1.title}`,
+      content: `A new assessment has been assigned: "${assignment1.title}". Review specifications and submit your findings before the deadline.`,
+      priority: 'IMPORTANT',
+      sourceType: 'ASSIGNMENT',
+      sourceId: assignment1.id,
+      isPinned: false,
+    },
+  });
+
+  await prisma.announcement.create({
+    data: {
+      departmentId: cyberDept.id,
+      authorId: cyberTutor.id,
+      title: `📅 Class Scheduled: ${schedule1.title}`,
+      content: `Class scheduled for tomorrow at 10:00 AM (${schedule1.location}). Please check your scheduler for Zoom credentials.`,
+      priority: 'IMPORTANT',
+      sourceType: 'CLASS_SCHEDULE',
+      sourceId: schedule1.id,
+      isPinned: false,
+    },
+  });
+
+  await prisma.announcement.create({
+    data: {
+      departmentId: cyberDept.id,
+      authorId: cyberTutor.id,
+      title: `📚 New Learning Material: ${material1.title}`,
+      content: `Tutor Alex Vance shared a new learning guide: "${material1.fileName}". Available for download in Learning Materials.`,
+      priority: 'NORMAL',
+      sourceType: 'MATERIAL',
+      sourceId: material1.id,
+      isPinned: false,
+    },
+  });
+
+  // 9. Seed Department Messages (Text-only with reply-to threading)
+  console.log('Seeding text-only chat messages...');
+  const msg1 = await prisma.message.create({
+    data: {
+      departmentId: cyberDept.id,
+      senderId: cyberTutor.id,
+      content: 'Welcome everyone to the Cybersecurity department space! Class schedules, materials, and assignments are ready.',
+    },
+  });
+
+  const msg2 = await prisma.message.create({
+    data: {
+      departmentId: cyberDept.id,
+      senderId: cyberIntern1.id,
+      content: 'Thanks Alex! Really looking forward to tomorrow’s pen-testing lab session.',
+      replyToId: msg1.id,
+    },
+  });
+
+  await prisma.message.create({
+    data: {
+      departmentId: cyberDept.id,
+      senderId: cyberIntern2.id,
+      content: 'I have downloaded the OWASP guide from the Learning Materials tab. Excited to get started!',
+      replyToId: msg1.id,
+    },
+  });
+
+  console.log('✅ Knowvia database successfully seeded!');
   console.log(`
   DEMO CREDENTIALS:
   ======================================================
-  Admin:               admin@nexus.hub        / password123
-  Cyber Tutor:         cyber.tutor@nexus.hub  / password123
-  Cyber Intern (David): david.cyber@nexus.hub  / password123
-  Cyber Intern (Maya):  maya.cyber@nexus.hub   / password123
-  Data Tutor:          data.tutor@nexus.hub   / password123
-  Data Intern (Sam):   sam.data@nexus.hub     / password123
-  Web Dev Tutor:       web.tutor@nexus.hub    / password123
+  Admin:               admin@knowvia.internal        / password123
+  Cyber Tutor:         cyber.tutor@knowvia.internal  / password123
+  Web Dev Tutor:       web.tutor@knowvia.internal    / password123
+  Cyber Intern (David): david.cyber@knowvia.internal / password123
+  Cyber Intern (Maya):  maya.cyber@knowvia.internal  / password123
+  Web Intern (Jordan): jordan.web@knowvia.internal   / password123
   ======================================================
   `);
 }

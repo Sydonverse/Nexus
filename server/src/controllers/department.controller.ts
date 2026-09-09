@@ -17,8 +17,8 @@ export const listDepartments = async (_req: AuthRequest, res: Response): Promise
         _count: {
           select: {
             members: { where: { status: 'APPROVED' } },
-            resources: true,
-            projects: true,
+            materials: true,
+            assignments: true,
           },
         },
       },
@@ -46,10 +46,10 @@ export const getDepartment = async (req: DepartmentRequest, res: Response): Prom
         _count: {
           select: {
             members: { where: { status: 'APPROVED' } },
-            resources: true,
+            materials: true,
             announcements: true,
             schedules: true,
-            projects: true,
+            assignments: true,
           },
         },
       },
@@ -71,11 +71,9 @@ export const createDepartment = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const normalizedSlug = slug.toLowerCase().trim().replace(/\s+/g, '-');
-
     const existing = await prisma.department.findFirst({
       where: {
-        OR: [{ name }, { slug: normalizedSlug }],
+        OR: [{ name: name.trim() }, { slug: slug.toLowerCase().trim() }],
       },
     });
 
@@ -84,17 +82,17 @@ export const createDepartment = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const department = await prisma.department.create({
+    const newDept = await prisma.department.create({
       data: {
-        name,
-        slug: normalizedSlug,
-        description,
-        icon: icon || 'code',
+        name: name.trim(),
+        slug: slug.toLowerCase().trim(),
+        description: description.trim(),
+        icon: icon || 'book-open',
         colorHex: colorHex || '#6366f1',
       },
     });
 
-    res.status(201).json({ department });
+    res.status(201).json({ department: newDept });
   } catch (error) {
     console.error('Create department error:', error);
     res.status(500).json({ error: 'Failed to create department' });
@@ -105,101 +103,46 @@ export const joinDepartment = async (req: AuthRequest, res: Response): Promise<v
   try {
     const { slug } = req.params;
     const user = req.user;
+
     if (!user) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
 
-    const department = await prisma.department.findUnique({
-      where: { slug: slug.toLowerCase() },
-    });
-
-    if (!department) {
-      res.status(404).json({ error: 'Department not found' });
-      return;
-    }
-
-    const existing = await prisma.departmentMember.findUnique({
-      where: {
-        userId_departmentId: {
-          userId: user.id,
-          departmentId: department.id,
-        },
-      },
-    });
-
-    if (existing) {
-      res.status(409).json({ error: `You have already applied or belong to this department (status: ${existing.status})` });
-      return;
-    }
-
-    const membership = await prisma.departmentMember.create({
-      data: {
-        userId: user.id,
-        departmentId: department.id,
-        role: user.role === 'TUTOR' ? 'TUTOR' : 'INTERN',
-        status: 'APPROVED',
-      },
-    });
-
-    res.status(201).json({ message: 'Joined department successfully', membership });
-  } catch (error) {
-    console.error('Join department error:', error);
-    res.status(500).json({ error: 'Failed to join department' });
-  }
-};
-
-export const getMembers = async (req: DepartmentRequest, res: Response): Promise<void> => {
-  try {
-    const dept = req.department;
+    const dept = await prisma.department.findUnique({ where: { slug } });
     if (!dept) {
       res.status(404).json({ error: 'Department not found' });
       return;
     }
 
-    const members = await prisma.departmentMember.findMany({
-      where: { departmentId: dept.id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            avatarUrl: true,
-            role: true,
-          },
-        },
-      },
-      orderBy: { joinedAt: 'asc' },
-    });
+    // Check if user already enrolled in another department (enforce single department for tutors/interns)
+    if (user.role !== 'ADMIN') {
+      const existingMembership = await prisma.departmentMember.findFirst({
+        where: { userId: user.id },
+        include: { department: true },
+      });
 
-    res.json({ members });
-  } catch (error) {
-    console.error('Get members error:', error);
-    res.status(500).json({ error: 'Failed to retrieve members' });
-  }
-};
+      if (existingMembership) {
+        res.status(400).json({
+          error: `You are already enrolled in ${existingMembership.department.name}. Users belong to one department only.`,
+        });
+        return;
+      }
+    }
 
-export const updateMemberStatus = async (req: DepartmentRequest, res: Response): Promise<void> => {
-  try {
-    const { memberId } = req.params;
-    const { status, role } = req.body; // status: APPROVED | REJECTED, role: TUTOR | INTERN
-
-    const updated = await prisma.departmentMember.update({
-      where: { id: memberId },
+    const memberRole = user.role === 'TUTOR' ? 'TUTOR' : 'INTERN';
+    const membership = await prisma.departmentMember.create({
       data: {
-        ...(status ? { status } : {}),
-        ...(role ? { role } : {}),
-      },
-      include: {
-        user: { select: { firstName: true, lastName: true, email: true } },
+        userId: user.id,
+        departmentId: dept.id,
+        role: memberRole,
+        status: 'APPROVED',
       },
     });
 
-    res.json({ message: 'Member status updated', member: updated });
+    res.status(201).json({ message: 'Enrolled in department', membership });
   } catch (error) {
-    console.error('Update member error:', error);
-    res.status(500).json({ error: 'Failed to update member status' });
+    console.error('Join department error:', error);
+    res.status(500).json({ error: 'Failed to join department' });
   }
 };

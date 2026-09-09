@@ -1,5 +1,12 @@
 import { io, Socket } from 'socket.io-client';
-import { ChatMessage, AppNotification } from '../types';
+import {
+  ChatMessage,
+  AppNotification,
+  Announcement,
+  ClassSchedule,
+  Assignment,
+  Material,
+} from '../types';
 
 const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ||
@@ -11,9 +18,18 @@ class SocketService {
   private notificationListeners: ((notif: AppNotification) => void)[] = [];
   private typingListeners: ((data: { userId: string; name: string; departmentSlug: string }) => void)[] = [];
   private stopTypingListeners: ((data: { userId: string; departmentSlug: string }) => void)[] = [];
+  private announcementListeners: ((ann: Announcement) => void)[] = [];
+  private announcementDeletedListeners: ((data: { id: string }) => void)[] = [];
+  private scheduleListeners: ((sched: ClassSchedule) => void)[] = [];
+  private scheduleUpdatedListeners: ((sched: ClassSchedule) => void)[] = [];
+  private scheduleDeletedListeners: ((data: { id: string }) => void)[] = [];
+  private assignmentListeners: ((assign: Assignment) => void)[] = [];
+  private assignmentDeletedListeners: ((data: { id: string }) => void)[] = [];
+  private materialListeners: ((mat: Material) => void)[] = [];
+  private materialDeletedListeners: ((data: { id: string }) => void)[] = [];
 
   public connect(token: string) {
-    if (this.socket?.connected) return;
+    if (this.socket?.connected) return this.socket;
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
@@ -24,7 +40,7 @@ class SocketService {
     });
 
     this.socket.on('connect', () => {
-      console.log('⚡ Socket connected to Nexus real-time server');
+      console.log('⚡ Connected to Knowvia real-time server');
     });
 
     this.socket.on('message:new', (message: ChatMessage) => {
@@ -35,17 +51,55 @@ class SocketService {
       this.notificationListeners.forEach((fn) => fn(notification));
     });
 
-    this.socket.on('user:typing', (data) => {
+    this.socket.on('user:typing', (data: { userId: string; name: string; departmentSlug: string }) => {
       this.typingListeners.forEach((fn) => fn(data));
     });
 
-    this.socket.on('user:stop_typing', (data) => {
+    this.socket.on('user:stop_typing', (data: { userId: string; departmentSlug: string }) => {
       this.stopTypingListeners.forEach((fn) => fn(data));
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('Socket disconnected');
+    this.socket.on('announcement:new', (ann: Announcement) => {
+      this.announcementListeners.forEach((fn) => fn(ann));
     });
+
+    this.socket.on('announcement:deleted', (data: { id: string }) => {
+      this.announcementDeletedListeners.forEach((fn) => fn(data));
+    });
+
+    this.socket.on('schedule:new', (sched: ClassSchedule) => {
+      this.scheduleListeners.forEach((fn) => fn(sched));
+    });
+
+    this.socket.on('schedule:updated', (sched: ClassSchedule) => {
+      this.scheduleUpdatedListeners.forEach((fn) => fn(sched));
+    });
+
+    this.socket.on('schedule:deleted', (data: { id: string }) => {
+      this.scheduleDeletedListeners.forEach((fn) => fn(data));
+    });
+
+    this.socket.on('assignment:new', (assign: Assignment) => {
+      this.assignmentListeners.forEach((fn) => fn(assign));
+    });
+
+    this.socket.on('assignment:deleted', (data: { id: string }) => {
+      this.assignmentDeletedListeners.forEach((fn) => fn(data));
+    });
+
+    this.socket.on('material:new', (mat: Material) => {
+      this.materialListeners.forEach((fn) => fn(mat));
+    });
+
+    this.socket.on('material:deleted', (data: { id: string }) => {
+      this.materialDeletedListeners.forEach((fn) => fn(data));
+    });
+
+    this.socket.on('disconnect', () => {
+      console.log('Socket disconnected from Knowvia server');
+    });
+
+    return this.socket;
   }
 
   public disconnect() {
@@ -55,9 +109,9 @@ class SocketService {
     }
   }
 
-  public sendMessage(departmentSlug: string, content: string, attachmentUrls?: string) {
+  public sendMessage(departmentSlug: string, content: string, replyToId?: string | null) {
     if (!this.socket) return;
-    this.socket.emit('message:send', { departmentSlug, content, attachmentUrls });
+    this.socket.emit('message:send', { departmentSlug, content, replyToId: replyToId || null });
   }
 
   public startTyping(departmentSlug: string) {
@@ -70,31 +124,94 @@ class SocketService {
     this.socket.emit('typing:stop', { departmentSlug });
   }
 
-  public onMessage(callback: (msg: ChatMessage) => void) {
+  public onNewMessage(callback: (msg: ChatMessage) => void) {
     this.messageListeners.push(callback);
     return () => {
       this.messageListeners = this.messageListeners.filter((fn) => fn !== callback);
     };
   }
 
-  public onNotification(callback: (notif: AppNotification) => void) {
+  public onNewNotification(callback: (notif: AppNotification) => void) {
     this.notificationListeners.push(callback);
     return () => {
       this.notificationListeners = this.notificationListeners.filter((fn) => fn !== callback);
     };
   }
 
-  public onTyping(callback: (data: { userId: string; name: string; departmentSlug: string }) => void) {
+  public onUserTyping(callback: (data: { userId: string; name: string; departmentSlug: string }) => void) {
     this.typingListeners.push(callback);
     return () => {
       this.typingListeners = this.typingListeners.filter((fn) => fn !== callback);
     };
   }
 
-  public onStopTyping(callback: (data: { userId: string; departmentSlug: string }) => void) {
+  public onUserStopTyping(callback: (data: { userId: string; departmentSlug: string }) => void) {
     this.stopTypingListeners.push(callback);
     return () => {
       this.stopTypingListeners = this.stopTypingListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onNewAnnouncement(callback: (ann: Announcement) => void) {
+    this.announcementListeners.push(callback);
+    return () => {
+      this.announcementListeners = this.announcementListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onAnnouncementDeleted(callback: (data: { id: string }) => void) {
+    this.announcementDeletedListeners.push(callback);
+    return () => {
+      this.announcementDeletedListeners = this.announcementDeletedListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onNewSchedule(callback: (sched: ClassSchedule) => void) {
+    this.scheduleListeners.push(callback);
+    return () => {
+      this.scheduleListeners = this.scheduleListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onScheduleUpdated(callback: (sched: ClassSchedule) => void) {
+    this.scheduleUpdatedListeners.push(callback);
+    return () => {
+      this.scheduleUpdatedListeners = this.scheduleUpdatedListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onScheduleDeleted(callback: (data: { id: string }) => void) {
+    this.scheduleDeletedListeners.push(callback);
+    return () => {
+      this.scheduleDeletedListeners = this.scheduleDeletedListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onNewAssignment(callback: (assign: Assignment) => void) {
+    this.assignmentListeners.push(callback);
+    return () => {
+      this.assignmentListeners = this.assignmentListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onAssignmentDeleted(callback: (data: { id: string }) => void) {
+    this.assignmentDeletedListeners.push(callback);
+    return () => {
+      this.assignmentDeletedListeners = this.assignmentDeletedListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onNewMaterial(callback: (mat: Material) => void) {
+    this.materialListeners.push(callback);
+    return () => {
+      this.materialListeners = this.materialListeners.filter((fn) => fn !== callback);
+    };
+  }
+
+  public onMaterialDeleted(callback: (data: { id: string }) => void) {
+    this.materialDeletedListeners.push(callback);
+    return () => {
+      this.materialDeletedListeners = this.materialDeletedListeners.filter((fn) => fn !== callback);
     };
   }
 }

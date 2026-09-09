@@ -1,7 +1,7 @@
 {
-  "short_name": "Nexus",
-  "name": "Nexus — Tech Hub Central Workspace",
-  "description": "Centralized Progressive Web App for tech hub resource sharing, project tracking, and collaboration.",
+  "short_name": "Knowvia",
+  "name": "Knowvia — Knowledge Repository & Learning Platform",
+  "description": "Progressive Web App knowledge repository for class scheduling, learning materials, assignment management, and collaboration.",
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -17,8 +17,8 @@
     }
   ],
   "start_url": "/",
-  "background_color": "#090d16",
-  "theme_color": "#6366f1",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
   "display": "standalone",
   "orientation": "portrait-primary",
   "scope": "/"

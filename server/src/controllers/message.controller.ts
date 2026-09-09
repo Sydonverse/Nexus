@@ -1,52 +1,72 @@
 import { Response } from 'express';
 import prisma from '../config/prisma';
-import { DepartmentRequest } from '../middleware/departmentGuard';
+import { AuthRequest } from '../middleware/auth';
 import { getIO } from '../socket';
 
-export const listMessages = async (req: DepartmentRequest, res: Response): Promise<void> => {
+export const listMessages = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const dept = req.department;
+    const { slug } = req.params;
+
+    const dept = await prisma.department.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+
     if (!dept) {
       res.status(404).json({ error: 'Department not found' });
       return;
     }
 
-    const { limit = '50', before } = req.query;
-    const take = Math.min(parseInt(String(limit), 10) || 50, 100);
-
     const messages = await prisma.message.findMany({
-      where: {
-        departmentId: dept.id,
-        ...(before ? { createdAt: { lt: new Date(String(before)) } } : {}),
-      },
+      where: { departmentId: dept.id },
       include: {
         sender: {
           select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
         },
+        replyTo: {
+          select: {
+            id: true,
+            content: true,
+            sender: {
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' },
-      take,
+      orderBy: { createdAt: 'asc' },
+      take: 100, // Reasonable history buffer
     });
 
-    res.json({ messages: messages.reverse() });
+    res.json({ messages });
   } catch (error) {
     console.error('List messages error:', error);
     res.status(500).json({ error: 'Failed to retrieve messages' });
   }
 };
 
-export const sendMessage = async (req: DepartmentRequest, res: Response): Promise<void> => {
+export const sendMessage = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const dept = req.department;
+    const { slug } = req.params;
+    const { content, replyToId } = req.body;
     const user = req.user;
-    if (!dept || !user) {
+
+    if (!user) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
 
-    const { content, attachmentUrls, replyToId } = req.body;
-    if (!content && !attachmentUrls) {
-      res.status(400).json({ error: 'Message content or attachments required' });
+    if (!content || !content.trim()) {
+      res.status(400).json({ error: 'Message content cannot be empty' });
+      return;
+    }
+
+    const dept = await prisma.department.findUnique({
+      where: { slug },
+      select: { id: true, slug: true },
+    });
+
+    if (!dept) {
+      res.status(404).json({ error: 'Department not found' });
       return;
     }
 
@@ -54,18 +74,26 @@ export const sendMessage = async (req: DepartmentRequest, res: Response): Promis
       data: {
         departmentId: dept.id,
         senderId: user.id,
-        content: content || '',
-        attachmentUrls: attachmentUrls ? JSON.stringify(attachmentUrls) : null,
+        content: content.trim(),
         replyToId: replyToId || null,
       },
       include: {
         sender: {
           select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true },
         },
+        replyTo: {
+          select: {
+            id: true,
+            content: true,
+            sender: {
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
       },
     });
 
-    // Broadcast through Socket.IO
+    // Real-time broadcast to department room
     const io = getIO();
     if (io) {
       io.to(`dept:${dept.slug}`).emit('message:new', message);
@@ -74,6 +102,6 @@ export const sendMessage = async (req: DepartmentRequest, res: Response): Promis
     res.status(201).json({ message });
   } catch (error) {
     console.error('Send message error:', error);
-    res.status(500).json({ error: 'Failed to send message' });
+    res.status(500).json({ error: 'Failed to post message' });
   }
 };

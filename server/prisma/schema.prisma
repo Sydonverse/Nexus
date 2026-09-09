@@ -19,18 +19,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  departmentMemberships   DepartmentMember[]
-  uploadedResources       Resource[]
-  announcements           Announcement[]
-  schedules               ClassSchedule[]
-  createdProjects         Project[]
-  projectGroupMemberships ProjectGroupMember[]
-  taskAssignments         TaskAssignment[]
-  taskSubmissions         TaskSubmission[]
-  givenFeedbacks          SubmissionFeedback[]
-  sentMessages            Message[]
-  pushSubscriptions       PushSubscription[]
-  notifications           Notification[]
+  departmentMemberships DepartmentMember[]
+  uploadedMaterials     Material[]
+  announcements         Announcement[]
+  scheduledClasses      ClassSchedule[]
+  createdAssignments    Assignment[]
+  submissions           Submission[]
+  submissionReviews     SubmissionReview[]
+  sentMessages          Message[]
+  pushSubscriptions     PushSubscription[]
+  notifications         Notification[]
 }
 
 model Department {
@@ -38,27 +36,27 @@ model Department {
   name        String   @unique
   slug        String   @unique
   description String
-  icon        String   @default("code")
+  icon        String   @default("book-open")
   colorHex    String   @default("#6366f1")
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
   members       DepartmentMember[]
-  resources     Resource[]
+  materials     Material[]
   announcements Announcement[]
   schedules     ClassSchedule[]
-  projects      Project[]
+  assignments   Assignment[]
   messages      Message[]
   notifications Notification[]
 }
 
 model DepartmentMember {
-  id           String     @id @default(uuid())
+  id           String   @id @default(uuid())
   userId       String
   departmentId String
-  role         String     @default("INTERN") // TUTOR, INTERN
-  status       String     @default("APPROVED") // PENDING, APPROVED, REJECTED
-  joinedAt     DateTime   @default(now())
+  role         String   @default("INTERN") // TUTOR, INTERN
+  status       String   @default("APPROVED") // PENDING, APPROVED, REJECTED
+  joinedAt     DateTime @default(now())
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
@@ -66,20 +64,35 @@ model DepartmentMember {
   @@unique([userId, departmentId])
 }
 
-model Resource {
-  id           String   @id @default(uuid())
-  departmentId String
-  uploadedById String
-  title        String
-  description  String
-  fileUrl      String
-  fileName     String
-  fileMimeType String
+model ClassSchedule {
+  id            String   @id @default(uuid())
+  departmentId  String
+  scheduledById String
+  title         String
+  description   String   @default("")
+  startTime     DateTime
+  endTime       DateTime
+  location      String   @default("Online / Hub Room")
+  meetingLink   String?
+  reminderSent  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  scheduler  User       @relation(fields: [scheduledById], references: [id], onDelete: Cascade)
+}
+
+model Material {
+  id            String   @id @default(uuid())
+  departmentId  String
+  uploadedById  String
+  title         String
+  description   String   @default("")
+  fileName      String
+  fileUrl       String
+  fileMimeType  String
   fileSizeBytes Int
-  category     String   @default("OTHER") // LECTURE, TUTORIAL, EXERCISE, REFERENCE, TOOL, OTHER
-  tags         String?  // comma-separated tags or JSON
-  isPinned     Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   uploader   User       @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
@@ -87,121 +100,57 @@ model Resource {
 
 model Announcement {
   id           String   @id @default(uuid())
-  departmentId String
+  departmentId String?  // null = global admin announcement across all departments
   authorId     String
   title        String
   content      String
   priority     String   @default("NORMAL") // NORMAL, IMPORTANT, URGENT
+  sourceType   String?  // ASSIGNMENT, CLASS_SCHEDULE, MATERIAL, or null
+  sourceId     String?  // Target entity ID for deep-linking
   isPinned     Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
-model ClassSchedule {
-  id            String   @id @default(uuid())
-  departmentId  String
-  scheduledById String
-  title         String
-  description   String
-  startTime     DateTime
-  endTime       DateTime
-  location      String   @default("Hub Room A")
-  meetingLink   String?
-  createdAt     DateTime @default(now())
-
-  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  scheduler  User       @relation(fields: [scheduledById], references: [id], onDelete: Cascade)
-}
-
-model Project {
+model Assignment {
   id           String    @id @default(uuid())
   departmentId String
   createdById  String
   title        String
   description  String
-  status       String    @default("PLANNING") // PLANNING, IN_PROGRESS, REVIEW, COMPLETED
-  startDate    DateTime?
+  status       String    @default("OPEN") // OPEN, CLOSED, GRADED
   dueDate      DateTime?
+  maxFileSize  Int       @default(26214400) // 25MB
   createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  department Department     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  creator    User           @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  groups     ProjectGroup[]
-  tasks      Task[]
+  department  Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  creator     User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  submissions Submission[]
 }
 
-model ProjectGroup {
-  id          String   @id @default(uuid())
-  projectId   String
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-
-  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  members ProjectGroupMember[]
-  tasks   Task[]
-}
-
-model ProjectGroupMember {
-  id         String   @id @default(uuid())
-  groupId    String
-  userId     String
-  role       String   @default("MEMBER") // LEAD, MEMBER
-  assignedAt DateTime @default(now())
-
-  group ProjectGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([groupId, userId])
-}
-
-model Task {
-  id             String    @id @default(uuid())
-  projectId      String
-  projectGroupId String?
-  title          String
-  description    String
-  status         String    @default("TODO") // TODO, IN_PROGRESS, IN_REVIEW, DONE
-  priority       String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
-  dueDate        DateTime?
-  sortOrder      Int       @default(0)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectGroup ProjectGroup?    @relation(fields: [projectGroupId], references: [id], onDelete: SetNull)
-  assignments  TaskAssignment[]
-  submissions  TaskSubmission[]
-}
-
-model TaskAssignment {
-  id         String   @id @default(uuid())
-  taskId     String
-  userId     String
-  assignedAt DateTime @default(now())
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([taskId, userId])
-}
-
-model TaskSubmission {
+model Submission {
   id            String   @id @default(uuid())
-  taskId        String
+  assignmentId  String
   submittedById String
-  notes         String
-  fileUrls      String?  // JSON stringified array of { name, url, size }
+  notes         String   @default("")
+  fileUrl       String?
+  fileName      String?
+  fileSizeBytes Int?
+  status        String   @default("SUBMITTED") // SUBMITTED, IN_REVIEW, APPROVED, NEEDS_REVISION, REJECTED
   submittedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  task        Task                 @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  submitter   User                 @relation(fields: [submittedById], references: [id], onDelete: Cascade)
-  feedbacks   SubmissionFeedback[]
+  assignment Assignment         @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  submitter  User               @relation(fields: [submittedById], references: [id], onDelete: Cascade)
+  reviews    SubmissionReview[]
+
+  @@unique([assignmentId, submittedById])
 }
 
-model SubmissionFeedback {
+model SubmissionReview {
   id           String   @id @default(uuid())
   submissionId String
   reviewerId   String
@@ -209,23 +158,37 @@ model SubmissionFeedback {
   verdict      String   @default("NEEDS_REVISION") // APPROVED, NEEDS_REVISION, REJECTED
   createdAt    DateTime @default(now())
 
-  submission TaskSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  reviewer   User           @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer   User       @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
 }
 
 model Message {
-  id             String   @id @default(uuid())
-  departmentId   String
-  senderId       String
-  content        String
-  attachmentUrls String?  // JSON string
-  replyToId      String?
-  createdAt      DateTime @default(now())
+  id           String   @id @default(uuid())
+  departmentId String
+  senderId     String
+  content      String
+  replyToId    String?
+  createdAt    DateTime @default(now())
 
   department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   sender     User       @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  replyTo    Message?   @relation("MessageReplies", fields: [replyToId], references: [id])
+  replyTo    Message?   @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies    Message[]  @relation("MessageReplies")
+}
+
+model Notification {
+  id           String   @id @default(uuid())
+  recipientId  String
+  departmentId String?
+  type         String   // ANNOUNCEMENT, CLASS_SCHEDULE, CLASS_REMINDER, ASSIGNMENT_CREATED, SUBMISSION_REVIEWED, MATERIAL_UPLOADED, MESSAGE
+  title        String
+  body         String
+  actionUrl    String
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  recipient  User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 }
 
 model PushSubscription {
@@ -238,19 +201,4 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Notification {
-  id           String   @id @default(uuid())
-  recipientId  String
-  departmentId String?
-  type         String   // ANNOUNCEMENT, CLASS_SCHEDULE, PROJECT_UPDATE, TASK_ASSIGNED, FEEDBACK, MESSAGE
-  title        String
-  body         String
-  actionUrl    String
-  isRead       Boolean  @default(false)
-  createdAt    DateTime @default(now())
-
-  recipient  User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 }

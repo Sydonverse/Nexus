@@ -9,16 +9,14 @@ import {
   getDepartment,
   createDepartment,
   joinDepartment,
-  getMembers,
-  updateMemberStatus,
 } from '../controllers/department.controller';
 
 import {
-  listResources,
-  uploadResource,
-  downloadResource,
-  deleteResource,
-} from '../controllers/resource.controller';
+  listMaterials,
+  uploadMaterial,
+  downloadMaterial,
+  deleteMaterial,
+} from '../controllers/material.controller';
 
 import {
   listAnnouncements,
@@ -29,74 +27,67 @@ import {
 import {
   listSchedules,
   createSchedule,
+  updateSchedule,
   deleteSchedule,
 } from '../controllers/schedule.controller';
 
 import {
-  listProjects,
-  getProjectById,
-  createProject,
-  createGroup,
-  assignGroupMember,
-  createTask,
-  updateTaskStatus,
-  submitTaskWork,
-  giveSubmissionFeedback,
-} from '../controllers/project.controller';
+  listAssignments,
+  createAssignment,
+  submitAssignment,
+  reviewSubmission,
+  deleteAssignment,
+} from '../controllers/assignment.controller';
 
 import { listMessages, sendMessage } from '../controllers/message.controller';
 
 const router = Router();
 
 // Base department routes
-router.get('/', authenticate, listDepartments);
+// Public listing of departments for registration dropdown
+router.get('/', listDepartments);
 router.post('/', authenticate, requireRoles(['ADMIN']), createDepartment);
 router.post('/:slug/join', authenticate, joinDepartment);
 
 // Department-scoped routes (strictly protected by departmentAccessGuard)
 router.get('/:slug', authenticate, departmentAccessGuard, getDepartment);
-router.get('/:slug/members', authenticate, departmentAccessGuard, getMembers);
-router.patch('/:slug/members/:memberId', authenticate, departmentAccessGuard, updateMemberStatus);
 
-// Resources
-router.get('/:slug/resources', authenticate, departmentAccessGuard, listResources);
-router.post('/:slug/resources', authenticate, departmentAccessGuard, upload.single('file'), uploadResource);
-router.get('/:slug/resources/download/:filename', authenticate, downloadResource);
-router.delete('/:slug/resources/:id', authenticate, departmentAccessGuard, deleteResource);
+// Learning Materials (File Sharing)
+router.get('/:slug/materials', authenticate, departmentAccessGuard, listMaterials);
+router.post('/:slug/materials', authenticate, departmentAccessGuard, upload.single('file'), uploadMaterial);
+router.get('/:slug/materials/download/:filename', authenticate, downloadMaterial);
+router.delete('/:slug/materials/:id', authenticate, departmentAccessGuard, deleteMaterial);
 
 // Announcements
 router.get('/:slug/announcements', authenticate, departmentAccessGuard, listAnnouncements);
 router.post('/:slug/announcements', authenticate, departmentAccessGuard, createAnnouncement);
 router.delete('/:slug/announcements/:id', authenticate, departmentAccessGuard, deleteAnnouncement);
 
-// Schedules
+// Class Schedules
 router.get('/:slug/schedules', authenticate, departmentAccessGuard, listSchedules);
 router.post('/:slug/schedules', authenticate, departmentAccessGuard, createSchedule);
+router.put('/:slug/schedules/:id', authenticate, departmentAccessGuard, updateSchedule);
 router.delete('/:slug/schedules/:id', authenticate, departmentAccessGuard, deleteSchedule);
 
-// Projects
-router.get('/:slug/projects', authenticate, departmentAccessGuard, listProjects);
-router.post('/:slug/projects', authenticate, departmentAccessGuard, createProject);
-router.get('/:slug/projects/:projectId', authenticate, departmentAccessGuard, getProjectById);
-router.post('/:slug/projects/:projectId/groups', authenticate, departmentAccessGuard, createGroup);
-router.post('/:slug/projects/:projectId/groups/:groupId/members', authenticate, departmentAccessGuard, assignGroupMember);
-router.post('/:slug/projects/:projectId/tasks', authenticate, departmentAccessGuard, createTask);
-router.patch('/:slug/projects/:projectId/tasks/:taskId/status', authenticate, departmentAccessGuard, updateTaskStatus);
+// Assignment Management
+router.get('/:slug/assignments', authenticate, departmentAccessGuard, listAssignments);
+router.post('/:slug/assignments', authenticate, departmentAccessGuard, createAssignment);
 router.post(
-  '/:slug/projects/:projectId/tasks/:taskId/submissions',
+  '/:slug/assignments/:assignmentId/submit',
   authenticate,
   departmentAccessGuard,
-  upload.array('files', 5),
-  submitTaskWork
+  upload.single('file'),
+  submitAssignment
 );
 router.post(
-  '/:slug/projects/:projectId/tasks/:taskId/submissions/:submissionId/feedback',
+  '/:slug/assignments/:assignmentId/submissions/:submissionId/review',
   authenticate,
   departmentAccessGuard,
-  giveSubmissionFeedback
+  reviewSubmission
 );
+router.delete('/:slug/assignments/:assignmentId', authenticate, departmentAccessGuard, deleteAssignment);
 
-// Messages
+// Chat Messages
 router.get('/:slug/messages', authenticate, departmentAccessGuard, listMessages);
 router.post('/:slug/messages', authenticate, departmentAccessGuard, sendMessage);
 

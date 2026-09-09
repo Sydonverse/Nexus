@@ -6,15 +6,14 @@ import {
   User,
   DepartmentMemberContext,
   Department,
-  Resource,
+  Material,
   Announcement,
   ClassSchedule,
-  Project,
-  Task,
+  Assignment,
+  AssignmentProgressStats,
   ChatMessage,
   AppNotification,
-  DepartmentMember,
-  TaskStatus,
+  SubmissionVerdict,
 } from './types';
 import { api } from './services/api';
 import { socketService } from './services/socket';
@@ -22,23 +21,19 @@ import { socketService } from './services/socket';
 import { Navbar } from './components/Navbar';
 import { Sidebar, ActiveTab } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
-import { ResourcesView } from './components/ResourcesView';
-import { ProjectsView } from './components/ProjectsView';
 import { ScheduleView } from './components/ScheduleView';
+import { MaterialsView } from './components/MaterialsView';
+import { AssignmentsView } from './components/AssignmentsView';
 import { AnnouncementsView } from './components/AnnouncementsView';
 import { ChatView } from './components/ChatView';
-import { MembersView } from './components/MembersView';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { AuthView } from './components/AuthView';
 
 import {
-  UploadResourceModal,
-  CreateAnnouncementModal,
+  UploadMaterialModal,
   ScheduleClassModal,
-  CreateProjectModal,
-  CreateTaskModal,
-  SubmitWorkModal,
-  GiveFeedbackModal,
+  CreateAssignmentModal,
+  CreateAnnouncementModal,
 } from './components/Modals';
 
 export const App: React.FC = () => {
@@ -51,16 +46,17 @@ export const App: React.FC = () => {
   const [userDepartments, setUserDepartments] = useState<DepartmentMemberContext[]>([]);
   const [activeDept, setActiveDept] = useState<DepartmentMemberContext | null>(null);
 
-  // Active Tab View
+  // Navigation & Deep-Link State
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
 
   // Department Scoped Data
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
   const [schedules, setSchedules] = useState<ClassSchedule[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [progressStats, setProgressStats] = useState<AssignmentProgressStats | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [members, setMembers] = useState<DepartmentMember[]>([]);
 
   // Notifications State
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -73,14 +69,9 @@ export const App: React.FC = () => {
 
   // Modals
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
-  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
-  const [activeTaskForModal, setActiveTaskForModal] = useState<Task | null>(null);
-  const [activeSubmissionId, setActiveSubmissionId] = useState<string | null>(null);
-  const [showSubmitWorkModal, setShowSubmitWorkModal] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false);
+  const [showCreateAnnouncementModal, setShowCreateAnnouncementModal] = useState(false);
 
   // PWA Install Prompt
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -88,27 +79,32 @@ export const App: React.FC = () => {
 
   // 1. Initial PWA & Service Worker Setup
   useEffect(() => {
-    // Register Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
-          console.log('Service Worker registered with scope:', reg.scope);
+          console.log('Knowvia Service Worker registered:', reg.scope);
         })
         .catch((err) => {
-          console.warn('Service Worker registration failed:', err);
+          console.warn('Service Worker registration skipped:', err);
         });
     }
 
-    // Listen for PWA beforeinstallprompt
-    const handleBeforeInstall = (e: any) => {
+    window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
       setCanInstallPwa(true);
-    };
+    });
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    // Fetch initial list of all departments for registration
+    api.departments
+      .list()
+      .then((res) => {
+        if (res.departments) {
+          setAvailableDepartments(res.departments);
+        }
+      })
+      .catch((err) => console.warn('Failed to fetch departments list:', err));
   }, []);
 
   const handleInstallPwa = async () => {
@@ -117,279 +113,255 @@ export const App: React.FC = () => {
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
       setCanInstallPwa(false);
+      setDeferredPrompt(null);
     }
-    setDeferredPrompt(null);
   };
 
-  // 2. Fetch User Profile on load
-  const loadMe = useCallback(async () => {
+  // 2. Fetch User Profile on Mount
+  const fetchCurrentUser = useCallback(async () => {
     setLoadingUser(true);
     try {
       const res = await api.auth.me();
-      setUser(res.user);
-      const depts: DepartmentMemberContext[] = res.user.departments || [];
-      setUserDepartments(depts);
+      if (res.user) {
+        setUser(res.user);
+        const depts: DepartmentMemberContext[] = res.user.departments || [];
+        setUserDepartments(depts);
 
-      if (depts.length > 0) {
-        setActiveDept(depts[0]);
+        if (depts.length > 0) {
+          // Restore saved department or default to first
+          const savedSlug = localStorage.getItem('knowvia_active_dept_slug');
+          const found = depts.find((d) => d.slug === savedSlug);
+          setActiveDept(found || depts[0]);
+        }
+      } else {
+        setUser(null);
       }
-    } catch (err) {
-      api.removeToken();
+    } catch {
       setUser(null);
+      api.removeToken();
     } finally {
       setLoadingUser(false);
     }
   }, []);
 
-  // 3. Fetch Public Departments list
-  const loadAvailableDepartments = useCallback(async () => {
+  useEffect(() => {
+    fetchCurrentUser();
+  }, [fetchCurrentUser]);
+
+  // 3. Connect Socket and Load Department Data
+  const loadDepartmentData = useCallback(async (slug: string) => {
     try {
-      const res = await api.departments.list();
-      setAvailableDepartments(res.departments);
+      const [matRes, schedRes, assignRes, annRes, msgRes] = await Promise.all([
+        api.materials.list(slug).catch(() => ({ materials: [] })),
+        api.schedules.list(slug).catch(() => ({ schedules: [] })),
+        api.assignments.list(slug).catch(() => ({ assignments: [], progressStats: null })),
+        api.announcements.list(slug).catch(() => ({ announcements: [] })),
+        api.messages.list(slug).catch(() => ({ messages: [] })),
+      ]);
+
+      setMaterials(matRes.materials || []);
+      setSchedules(schedRes.schedules || []);
+      setAssignments(assignRes.assignments || []);
+      setProgressStats(assignRes.progressStats || null);
+      setAnnouncements(annRes.announcements || []);
+      setMessages(msgRes.messages || []);
     } catch (err) {
-      console.warn('Could not load public departments:', err);
+      console.error('Error fetching department data:', err);
+    }
+  }, []);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await api.notifications.list();
+      setNotifications(res.notifications || []);
+      setUnreadCount(res.unreadCount || 0);
+    } catch (err) {
+      console.warn('Failed to fetch notifications:', err);
     }
   }, []);
 
   useEffect(() => {
-    loadMe();
-    loadAvailableDepartments();
-  }, [loadMe, loadAvailableDepartments]);
+    if (!user || !activeDept) return;
 
-  // Auto-select department for Admin or if departments list becomes available
-  useEffect(() => {
-    if (user?.role === 'ADMIN' && (!activeDept || userDepartments.length === 0) && availableDepartments.length > 0) {
-      const adminDepts: DepartmentMemberContext[] = availableDepartments.map((d) => ({
-        id: d.id,
-        name: d.name,
-        slug: d.slug,
-        colorHex: d.colorHex,
-        icon: d.icon,
-        memberRole: 'ADMIN',
-      }));
-      setUserDepartments(adminDepts);
-      if (!activeDept) {
-        setActiveDept(adminDepts[0]);
+    loadDepartmentData(activeDept.slug);
+    fetchNotifications();
+
+    // Connect WebSocket
+    const token =
+      localStorage.getItem('knowvia_auth_token') || localStorage.getItem('nexus_auth_token');
+    const socket = socketService.connect(token || '');
+
+    // Socket Event Subscriptions
+    socketService.onNewMessage((msg) => {
+      setMessages((prev) => [...prev, msg]);
+    });
+
+    socketService.onUserTyping((data) => {
+      if (data.departmentSlug === activeDept.slug && data.userId !== user.id) {
+        setTypingUsers((prev) => {
+          if (prev.some((u) => u.userId === data.userId)) return prev;
+          return [...prev, { userId: data.userId, name: data.name }];
+        });
       }
+    });
+
+    socketService.onUserStopTyping((data) => {
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+    });
+
+    socketService.onNewAnnouncement((ann) => {
+      setAnnouncements((prev) => [ann, ...prev]);
+      fetchNotifications();
+    });
+
+    socketService.onAnnouncementDeleted((data) => {
+      setAnnouncements((prev) => prev.filter((a) => a.id !== data.id));
+    });
+
+    socketService.onNewSchedule((sched) => {
+      setSchedules((prev) => [...prev, sched]);
+      fetchNotifications();
+    });
+
+    socketService.onScheduleUpdated((sched) => {
+      setSchedules((prev) => prev.map((s) => (s.id === sched.id ? sched : s)));
+    });
+
+    socketService.onScheduleDeleted((data) => {
+      setSchedules((prev) => prev.filter((s) => s.id !== data.id));
+    });
+
+    socketService.onNewAssignment((assign) => {
+      setAssignments((prev) => [assign, ...prev]);
+      fetchNotifications();
+    });
+
+    socketService.onAssignmentDeleted((data) => {
+      setAssignments((prev) => prev.filter((a) => a.id !== data.id));
+    });
+
+    socketService.onNewMaterial((mat) => {
+      setMaterials((prev) => [mat, ...prev]);
+      fetchNotifications();
+    });
+
+    socketService.onMaterialDeleted((data) => {
+      setMaterials((prev) => prev.filter((m) => m.id !== data.id));
+    });
+
+    socketService.onNewNotification((notif) => {
+      setNotifications((prev) => [notif, ...prev]);
+      setUnreadCount((c) => c + 1);
+    });
+
+    return () => {
+      socketService.disconnect();
+    };
+  }, [user, activeDept, loadDepartmentData, fetchNotifications]);
+
+  // 4. Department Switch Handler (Admin only or profile refresh)
+  const handleSelectDept = (dept: DepartmentMemberContext) => {
+    setActiveDept(dept);
+    localStorage.setItem('knowvia_active_dept_slug', dept.slug);
+    loadDepartmentData(dept.slug);
+  };
+
+  // 5. Navigation & Deep-Linking
+  const handleNavigate = (tab: ActiveTab, targetId?: string) => {
+    setActiveTab(tab);
+    if (targetId) {
+      setSelectedAssignmentId(targetId);
     }
-  }, [user, activeDept, userDepartments.length, availableDepartments]);
+  };
 
-  // 4. WebSocket connection lifecycle
-  useEffect(() => {
-    const token = localStorage.getItem('nexus_auth_token');
-    if (user && token) {
-      socketService.connect(token);
-
-      const unsubMsg = socketService.onMessage((newMsg) => {
-        if (activeDept && newMsg.departmentId === activeDept.id) {
-          setMessages((prev) => [...prev, newMsg]);
-        }
-      });
-
-      const unsubNotif = socketService.onNotification((newNotif) => {
-        setNotifications((prev) => [newNotif, ...prev]);
-        setUnreadCount((c) => c + 1);
-
-        // Native Browser Notification if allowed
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(newNotif.title, {
-            body: newNotif.body,
-            icon: '/icons/icon-192.png',
-          });
-        }
-      });
-
-      const unsubTyping = socketService.onTyping((data) => {
-        if (activeDept && data.departmentSlug === activeDept.slug) {
-          setTypingUsers((prev) => {
-            if (prev.find((u) => u.userId === data.userId)) return prev;
-            return [...prev, { userId: data.userId, name: data.name }];
-          });
-        }
-      });
-
-      const unsubStopTyping = socketService.onStopTyping((data) => {
-        if (activeDept && data.departmentSlug === activeDept.slug) {
-          setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
-        }
-      });
-
-      return () => {
-        unsubMsg();
-        unsubNotif();
-        unsubTyping();
-        unsubStopTyping();
-      };
-    }
-  }, [user, activeDept]);
-
-  // 5. Update Dynamic CSS Theme Colors when active department changes
-  useEffect(() => {
-    if (activeDept) {
-      document.documentElement.style.setProperty('--dept-accent', activeDept.colorHex);
-      document.documentElement.style.setProperty(
-        '--dept-glow',
-        `${activeDept.colorHex}33`
-      );
-    }
-  }, [activeDept]);
-
-  // 6. Fetch Department Scoped Data
-  const loadDepartmentData = useCallback(async () => {
+  // 6. Action Handlers
+  const handleSendMessage = async (content: string, replyToId?: string | null) => {
     if (!activeDept) return;
-    const slug = activeDept.slug;
-
     try {
-      const [resRes, resAnn, resSched, resProj, resMsg, resMem, resNotif] =
-        await Promise.allSettled([
-          api.resources.list(slug),
-          api.announcements.list(slug),
-          api.schedules.list(slug),
-          api.projects.list(slug),
-          api.messages.list(slug),
-          api.departments.members(slug),
-          api.notifications.list(),
-        ]);
-
-      if (resRes.status === 'fulfilled') setResources(resRes.value.resources);
-      if (resAnn.status === 'fulfilled') setAnnouncements(resAnn.value.announcements);
-      if (resSched.status === 'fulfilled') setSchedules(resSched.value.schedules);
-      if (resProj.status === 'fulfilled') setProjects(resProj.value.projects);
-      if (resMsg.status === 'fulfilled') setMessages(resMsg.value.messages);
-      if (resMem.status === 'fulfilled') setMembers(resMem.value.members);
-      if (resNotif.status === 'fulfilled') {
-        setNotifications(resNotif.value.notifications);
-        setUnreadCount(resNotif.value.unreadCount);
-      }
-    } catch (error) {
-      console.error('Error fetching department data:', error);
-    }
-  }, [activeDept]);
-
-  useEffect(() => {
-    if (user && activeDept) {
-      loadDepartmentData();
-    }
-  }, [user, activeDept, loadDepartmentData]);
-
-  // Auth Handlers
-  const handleLogin = async (email: string, password?: string) => {
-    const res = await api.auth.login({ email, password: password || 'password123' });
-    api.setToken(res.token);
-    setUser(res.user);
-    const depts: DepartmentMemberContext[] = res.user.departments || [];
-    setUserDepartments(depts);
-    if (depts.length > 0) {
-      setActiveDept(depts[0]);
+      socketService.sendMessage(activeDept.slug, content, replyToId);
+    } catch {
+      await api.messages.send(activeDept.slug, { content, replyToId });
     }
   };
 
-  const handleRegister = async (data: any) => {
-    const res = await api.auth.register(data);
-    api.setToken(res.token);
-    await loadMe();
-  };
-
-  const handleLogout = () => {
-    api.removeToken();
-    socketService.disconnect();
-    setUser(null);
-    setActiveDept(null);
-  };
-
-  // Resource Upload
-  const handleUploadResource = async (formData: FormData) => {
+  const handleUploadMaterial = async (formData: FormData) => {
     if (!activeDept) return;
-    await api.resources.upload(activeDept.slug, formData);
-    await loadDepartmentData();
+    const res = await api.materials.upload(activeDept.slug, formData);
+    if (res.material) {
+      setMaterials((prev) => [res.material, ...prev]);
+    }
+    // Refresh announcements
+    api.announcements.list(activeDept.slug).then((r) => setAnnouncements(r.announcements || []));
   };
 
-  const handleDeleteResource = async (id: string) => {
-    if (!activeDept) return;
-    await api.resources.delete(activeDept.slug, id);
-    setResources((prev) => prev.filter((r) => r.id !== id));
+  const handleDeleteMaterial = async (id: string) => {
+    if (!activeDept || !confirm('Are you sure you want to delete this learning material?')) return;
+    await api.materials.delete(activeDept.slug, id);
+    setMaterials((prev) => prev.filter((m) => m.id !== id));
   };
 
-  // Announcement Handlers
-  const handleCreateAnnouncement = async (data: any) => {
+  const handleScheduleClass = async (data: any) => {
     if (!activeDept) return;
-    await api.announcements.create(activeDept.slug, data);
-    await loadDepartmentData();
-  };
-
-  const handleDeleteAnnouncement = async (id: string) => {
-    if (!activeDept) return;
-    await api.announcements.delete(activeDept.slug, id);
-    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-  };
-
-  // Schedule Handlers
-  const handleCreateSchedule = async (data: any) => {
-    if (!activeDept) return;
-    await api.schedules.create(activeDept.slug, data);
-    await loadDepartmentData();
+    const res = await api.schedules.create(activeDept.slug, data);
+    if (res.schedule) {
+      setSchedules((prev) => [...prev, res.schedule]);
+    }
+    api.announcements.list(activeDept.slug).then((r) => setAnnouncements(r.announcements || []));
   };
 
   const handleDeleteSchedule = async (id: string) => {
-    if (!activeDept) return;
+    if (!activeDept || !confirm('Are you sure you want to cancel this scheduled class?')) return;
     await api.schedules.delete(activeDept.slug, id);
     setSchedules((prev) => prev.filter((s) => s.id !== id));
   };
 
-  // Project Handlers
-  const handleCreateProject = async (data: any) => {
+  const handleCreateAssignment = async (data: any) => {
     if (!activeDept) return;
-    await api.projects.create(activeDept.slug, data);
-    await loadDepartmentData();
+    const res = await api.assignments.create(activeDept.slug, data);
+    if (res.assignment) {
+      setAssignments((prev) => [res.assignment, ...prev]);
+    }
+    api.announcements.list(activeDept.slug).then((r) => setAnnouncements(r.announcements || []));
   };
 
-  const handleCreateTask = async (data: any) => {
-    if (!activeDept || !projects[0]) return;
-    await api.projects.createTask(activeDept.slug, projects[0].id, data);
-    await loadDepartmentData();
+  const handleSubmitAssignment = async (assignmentId: string, formData: FormData) => {
+    if (!activeDept) return;
+    await api.assignments.submit(activeDept.slug, assignmentId, formData);
+    // Reload assignment list to update user's submission state and progress tracker
+    loadDepartmentData(activeDept.slug);
   };
 
-  const handleUpdateTaskStatus = async (
-    projectId: string,
-    taskId: string,
-    status: TaskStatus
+  const handleReviewSubmission = async (
+    assignmentId: string,
+    submissionId: string,
+    data: { comment: string; verdict: SubmissionVerdict }
   ) => {
     if (!activeDept) return;
-    await api.projects.updateTaskStatus(activeDept.slug, projectId, taskId, status);
-    await loadDepartmentData();
+    await api.assignments.review(activeDept.slug, assignmentId, submissionId, data);
+    loadDepartmentData(activeDept.slug);
   };
 
-  const handleSubmitWork = async (formData: FormData) => {
-    if (!activeDept || !projects[0] || !activeTaskForModal) return;
-    await api.projects.submitWork(
-      activeDept.slug,
-      projects[0].id,
-      activeTaskForModal.id,
-      formData
-    );
-    await loadDepartmentData();
+  const handleDeleteAssignment = async (assignmentId: string) => {
+    if (!activeDept || !confirm('Are you sure you want to delete this assignment?')) return;
+    await api.assignments.delete(activeDept.slug, assignmentId);
+    setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
   };
 
-  const handleGiveFeedback = async (data: any) => {
-    if (!activeDept || !projects[0] || !activeTaskForModal || !activeSubmissionId) return;
-    await api.projects.giveFeedback(
-      activeDept.slug,
-      projects[0].id,
-      activeTaskForModal.id,
-      activeSubmissionId,
-      data
-    );
-    await loadDepartmentData();
-  };
-
-  // Chat Send
-  const handleSendMessage = async (content: string) => {
+  const handleCreateAnnouncement = async (data: any) => {
     if (!activeDept) return;
-    socketService.sendMessage(activeDept.slug, content);
+    const res = await api.announcements.create(activeDept.slug, data);
+    if (res.announcement) {
+      setAnnouncements((prev) => [res.announcement, ...prev]);
+    }
   };
 
-  // Notifications
-  const handleMarkRead = async (id: string) => {
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!activeDept || !confirm('Are you sure you want to delete this announcement?')) return;
+    await api.announcements.delete(activeDept.slug, id);
+    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleMarkNotificationRead = async (id: string) => {
     await api.notifications.markRead(id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
@@ -397,66 +369,92 @@ export const App: React.FC = () => {
     setUnreadCount((c) => Math.max(0, c - 1));
   };
 
-  const handleMarkAllRead = async () => {
+  const handleMarkAllNotificationsRead = async () => {
     await api.notifications.markAllRead();
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     setUnreadCount(0);
   };
 
   const handleEnablePush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('Push notifications are not supported in this browser.');
+      return;
+    }
+
     try {
-      if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-        alert('Push notifications are not supported on this browser.');
-        return;
-      }
-
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        alert('Notification permission was denied.');
-        return;
-      }
-
-      const registration = await navigator.serviceWorker.ready;
       const { publicKey } = await api.notifications.getVapidKey();
-
-      // Convert VAPID key to Uint8Array
-      const rawData = window.atob(publicKey.replace(/-/g, '+').replace(/_/g, '/'));
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-      }
+      const registration = await navigator.serviceWorker.ready;
 
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: outputArray,
+        applicationServerKey: publicKey,
       });
 
-      const subJson = subscription.toJSON();
+      const subData = JSON.parse(JSON.stringify(subscription));
       await api.notifications.subscribePush({
-        endpoint: subJson.endpoint,
-        keys: subJson.keys,
+        endpoint: subData.endpoint,
+        keys: subData.keys,
         userAgent: navigator.userAgent,
       });
 
       setPushEnabled(true);
-      alert('✅ Push notifications activated for your department!');
-    } catch (err) {
-      console.error('Push activation failed:', err);
+      alert('✅ Push notifications enabled! You will receive instant class reminders and announcements.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to enable push notifications');
     }
   };
 
+  // Auth Handlers
+  const handleLogin = async (email: string, password = 'password123') => {
+    const res = await api.auth.login({ email, password });
+    if (res.token) {
+      api.setToken(res.token);
+      setUser(res.user);
+      const depts = res.user.departments || [];
+      setUserDepartments(depts);
+      if (depts.length > 0) {
+        setActiveDept(depts[0]);
+        localStorage.setItem('knowvia_active_dept_slug', depts[0].slug);
+      }
+    }
+  };
+
+  const handleRegister = async (data: any) => {
+    const res = await api.auth.register(data);
+    if (res.token) {
+      api.setToken(res.token);
+      setUser(res.user);
+      if (res.user.department) {
+        const deptCtx: DepartmentMemberContext = {
+          ...res.user.department,
+          memberRole: res.user.role,
+        };
+        setUserDepartments([deptCtx]);
+        setActiveDept(deptCtx);
+        localStorage.setItem('knowvia_active_dept_slug', deptCtx.slug);
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    api.removeToken();
+    setUser(null);
+    setUserDepartments([]);
+    setActiveDept(null);
+    socketService.disconnect();
+  };
+
+  // Loading Screen
   if (loadingUser) {
     return (
-      <div className="auth-page-container">
-        <div className="glass-panel" style={{ padding: '30px', textAlign: 'center' }}>
-          <div className="status-online-dot mb-3"></div>
-          <h2>Loading Nexus Tech Hub Workspace...</h2>
-        </div>
+      <div className="loading-screen">
+        <div className="spinner-clean"></div>
+        <p className="loading-text">Loading Knowvia Platform...</p>
       </div>
     );
   }
 
-  // If not logged in, render AuthView
+  // Not Logged In -> Auth View
   if (!user) {
     return (
       <AuthView
@@ -467,17 +465,16 @@ export const App: React.FC = () => {
     );
   }
 
-  const isTutorOrAdmin =
-    user.role === 'ADMIN' || activeDept?.memberRole === 'TUTOR';
+  const isTutorOrAdmin = user.role === 'TUTOR' || user.role === 'ADMIN';
 
   return (
-    <div className="app-container">
-      {/* Top Navbar */}
+    <div className="app-layout">
+      {/* Top Navigation Bar */}
       <Navbar
         user={user}
         activeDept={activeDept}
         departments={userDepartments}
-        onSelectDept={setActiveDept}
+        onSelectDept={handleSelectDept}
         notifications={notifications}
         unreadCount={unreadCount}
         onOpenNotifications={() => setShowNotifDrawer(true)}
@@ -487,62 +484,33 @@ export const App: React.FC = () => {
         onInstallPwa={handleInstallPwa}
       />
 
-      {/* Main Layout */}
-      <div className="main-layout">
-        {/* Sidebar */}
+      <div className="app-main-layout">
+        {/* Navigation Sidebar */}
         <Sidebar
           activeTab={activeTab}
-          onSelectTab={setActiveTab}
+          onSelectTab={(tab) => handleNavigate(tab)}
           activeDept={activeDept}
-          unreadCount={unreadCount}
           currentUser={user}
+          unreadCount={unreadCount}
         />
 
-        {/* View Content */}
-        <main className="main-content">
+        {/* Main Workspace Body */}
+        <main className="main-content-viewport">
           {activeDept ? (
             <>
               {activeTab === 'dashboard' && (
                 <DashboardView
+                  user={user}
                   activeDept={activeDept}
-                  resources={resources}
+                  materials={materials}
                   announcements={announcements}
                   schedules={schedules}
-                  projects={projects}
-                  onNavigate={setActiveTab}
-                  isTutorOrAdmin={isTutorOrAdmin}
+                  assignments={assignments}
+                  progressStats={progressStats}
+                  onNavigate={handleNavigate}
                   onOpenUpload={() => setShowUploadModal(true)}
                   onOpenSchedule={() => setShowScheduleModal(true)}
-                />
-              )}
-
-              {activeTab === 'resources' && (
-                <ResourcesView
-                  resources={resources}
-                  activeDept={activeDept}
-                  isTutorOrAdmin={isTutorOrAdmin}
-                  onOpenUpload={() => setShowUploadModal(true)}
-                  onDeleteResource={handleDeleteResource}
-                />
-              )}
-
-              {activeTab === 'projects' && (
-                <ProjectsView
-                  projects={projects}
-                  activeDept={activeDept}
-                  isTutorOrAdmin={isTutorOrAdmin}
-                  onOpenCreateProject={() => setShowCreateProjectModal(true)}
-                  onOpenCreateTask={() => setShowCreateTaskModal(true)}
-                  onUpdateTaskStatus={handleUpdateTaskStatus}
-                  onOpenSubmitWork={(_pid, task) => {
-                    setActiveTaskForModal(task);
-                    setShowSubmitWorkModal(true);
-                  }}
-                  onOpenFeedback={(_pid, task, subId) => {
-                    setActiveTaskForModal(task);
-                    setActiveSubmissionId(subId);
-                    setShowFeedbackModal(true);
-                  }}
+                  onOpenAssignmentModal={() => setShowCreateAssignmentModal(true)}
                 />
               )}
 
@@ -556,13 +524,37 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {activeTab === 'announcements' && (
+              {activeTab === 'materials' && (
+                <MaterialsView
+                  materials={materials}
+                  activeDept={activeDept}
+                  isTutorOrAdmin={isTutorOrAdmin}
+                  onOpenUploadModal={() => setShowUploadModal(true)}
+                  onDeleteMaterial={handleDeleteMaterial}
+                />
+              )}
+
+              {activeTab === 'assignments' && (
+                <AssignmentsView
+                  assignments={assignments}
+                  activeDept={activeDept}
+                  currentUser={user}
+                  onOpenCreateModal={() => setShowCreateAssignmentModal(true)}
+                  onSubmitAssignment={handleSubmitAssignment}
+                  onReviewSubmission={handleReviewSubmission}
+                  onDeleteAssignment={handleDeleteAssignment}
+                  selectedAssignmentId={selectedAssignmentId}
+                />
+              )}
+
+              {activeTab === 'announcements' && isTutorOrAdmin && (
                 <AnnouncementsView
                   announcements={announcements}
                   activeDept={activeDept}
                   isTutorOrAdmin={isTutorOrAdmin}
-                  onOpenCreateModal={() => setShowAnnouncementModal(true)}
+                  onOpenCreateModal={() => setShowCreateAnnouncementModal(true)}
                   onDeleteAnnouncement={handleDeleteAnnouncement}
+                  onNavigate={handleNavigate}
                 />
               )}
 
@@ -575,125 +567,59 @@ export const App: React.FC = () => {
                   typingUsers={typingUsers}
                 />
               )}
-
-              {activeTab === 'members' && (
-                <MembersView members={members} activeDept={activeDept} />
-              )}
             </>
-          ) : user?.role === 'ADMIN' ? (
-            <div className="empty-state-card glass-panel" style={{ padding: '36px', textAlign: 'center' }}>
-              <h2>Hub Administrator Workspace</h2>
-              <p className="text-muted" style={{ marginBottom: '20px' }}>
-                Select any department below to view and manage its resources, projects, and activities:
-              </p>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {availableDepartments.map((dept) => (
-                  <button
-                    key={dept.id}
-                    className="btn-primary"
-                    style={{ background: dept.colorHex }}
-                    onClick={() => {
-                      const adminContext: DepartmentMemberContext = {
-                        id: dept.id,
-                        name: dept.name,
-                        slug: dept.slug,
-                        colorHex: dept.colorHex,
-                        icon: dept.icon,
-                        memberRole: 'ADMIN',
-                      };
-                      setActiveDept(adminContext);
-                    }}
-                  >
-                    <span>{dept.name} Space</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           ) : (
-            <div className="empty-state-card glass-panel" style={{ padding: '36px', textAlign: 'center' }}>
-              <h2>No Department Enrolled</h2>
-              <p className="text-muted" style={{ marginBottom: '20px' }}>
-                Choose a department to join and submit your enrollment request:
-              </p>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {availableDepartments.map((dept) => (
-                  <button
-                    key={dept.id}
-                    className="btn-secondary"
-                    onClick={async () => {
-                      await api.departments.join(dept.slug);
-                      await loadMe();
-                    }}
-                  >
-                    Join {dept.name}
-                  </button>
-                ))}
-              </div>
+            <div className="empty-state-card mt-8">
+              <h3>No Department Selected</h3>
+              <p className="text-muted">Please select or join a department workspace to continue.</p>
             </div>
           )}
         </main>
       </div>
 
-      {/* Notification Drawer */}
+      {/* Notifications & Announcements Drawer (for Bell Icon, especially students) */}
       <NotificationDrawer
         isOpen={showNotifDrawer}
         onClose={() => setShowNotifDrawer(false)}
         notifications={notifications}
         unreadCount={unreadCount}
-        onMarkRead={handleMarkRead}
-        onMarkAllRead={handleMarkAllRead}
+        onMarkRead={handleMarkNotificationRead}
+        onMarkAllRead={handleMarkAllNotificationsRead}
         onEnablePush={handleEnablePush}
         pushEnabled={pushEnabled}
+        onNavigate={handleNavigate}
       />
 
-      {/* Modals */}
+      {/* Modals for Tutors/Admin */}
       {activeDept && (
         <>
-          <UploadResourceModal
+          <UploadMaterialModal
             isOpen={showUploadModal}
             onClose={() => setShowUploadModal(false)}
-            onUpload={handleUploadResource}
+            onSubmit={handleUploadMaterial}
             activeDept={activeDept}
-          />
-
-          <CreateAnnouncementModal
-            isOpen={showAnnouncementModal}
-            onClose={() => setShowAnnouncementModal(false)}
-            onCreate={handleCreateAnnouncement}
           />
 
           <ScheduleClassModal
             isOpen={showScheduleModal}
             onClose={() => setShowScheduleModal(false)}
-            onSchedule={handleCreateSchedule}
+            onSubmit={handleScheduleClass}
+            activeDept={activeDept}
           />
 
-          <CreateProjectModal
-            isOpen={showCreateProjectModal}
-            onClose={() => setShowCreateProjectModal(false)}
-            onCreate={handleCreateProject}
+          <CreateAssignmentModal
+            isOpen={showCreateAssignmentModal}
+            onClose={() => setShowCreateAssignmentModal(false)}
+            onSubmit={handleCreateAssignment}
+            activeDept={activeDept}
           />
 
-          <CreateTaskModal
-            isOpen={showCreateTaskModal}
-            onClose={() => setShowCreateTaskModal(false)}
-            projectId={projects[0]?.id || ''}
-            onCreate={handleCreateTask}
-          />
-
-          <SubmitWorkModal
-            isOpen={showSubmitWorkModal}
-            onClose={() => setShowSubmitWorkModal(false)}
-            task={activeTaskForModal}
-            onSubmitWork={handleSubmitWork}
-          />
-
-          <GiveFeedbackModal
-            isOpen={showFeedbackModal}
-            onClose={() => setShowFeedbackModal(false)}
-            task={activeTaskForModal}
-            submissionId={activeSubmissionId}
-            onGiveFeedback={handleGiveFeedback}
+          <CreateAnnouncementModal
+            isOpen={showCreateAnnouncementModal}
+            onClose={() => setShowCreateAnnouncementModal(false)}
+            onSubmit={handleCreateAnnouncement}
+            activeDept={activeDept}
+            isAdmin={user.role === 'ADMIN'}
           />
         </>
       )}

@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { MAX_FILE_SIZE_BYTES, sanitizeFilename } from '../utils/fileValidator';
 
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
 
@@ -14,7 +15,7 @@ const storage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const sanitizedOriginal = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const sanitizedOriginal = sanitizeFilename(file.originalname);
     cb(null, `${uniqueSuffix}-${sanitizedOriginal}`);
   },
 });
@@ -22,6 +23,6 @@ const storage = multer.diskStorage({
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB limit
+    fileSize: MAX_FILE_SIZE_BYTES, // 25MB efficiency limit
   },
 });
