@@ -1,855 +1,1262 @@
-# Nexus — Platform Architecture Design
+# Knowvia — Complete Platform Architecture
 
-A centralized Progressive Web App (PWA) for the tech hub that unifies resource sharing, project management, progress tracking, class scheduling, messaging, and push notifications — all scoped by department with strict access control.
-
----
-
-## 1. System Overview
-
-```mermaid
-graph TB
-    subgraph Clients
-        PWA["PWA (React/Next.js)"]
-        Mobile["Mobile Browser (PWA Installed)"]
-    end
-
-    subgraph API Layer
-        API["REST API (Node.js / Express)"]
-        WS["WebSocket Server (Socket.IO)"]
-        PUSH["Push Notification Service (Web Push / FCM)"]
-    end
-
-    subgraph Data Layer
-        DB["PostgreSQL Database"]
-        CACHE["Redis (Sessions + Cache + Pub/Sub)"]
-        STORAGE["Object Storage (S3 / Supabase Storage)"]
-    end
-
-    PWA --> API
-    Mobile --> API
-    PWA --> WS
-    Mobile --> WS
-    API --> DB
-    API --> CACHE
-    API --> STORAGE
-    API --> PUSH
-    WS --> CACHE
-    PUSH --> PWA
-    PUSH --> Mobile
-```
-
-### Tech Stack Summary
-
-| Layer | Technology | Rationale |
-|---|---|---|
-| **Frontend** | Next.js (React) + TypeScript | SSR, PWA support, file-based routing, strong ecosystem |
-| **Styling** | Vanilla CSS + CSS Custom Properties | Full control, no framework lock-in |
-| **State Management** | Zustand + React Query (TanStack Query) | Lightweight global state + server-state caching/sync |
-| **Backend API** | Node.js + Express + TypeScript | JavaScript full-stack, fast development |
-| **Database** | PostgreSQL | Relational integrity for roles/departments/projects, JSONB for flexibility |
-| **ORM** | Prisma | Type-safe queries, migrations, schema-first design |
-| **Real-time** | Socket.IO | WebSocket abstraction with rooms (department-scoped channels) |
-| **File Storage** | Supabase Storage or AWS S3 | Scalable object storage for any file type |
-| **Auth** | JWT (access + refresh tokens) + bcrypt | Stateless API auth with secure password hashing |
-| **Push Notifications** | Web Push API (VAPID) + FCM fallback | Native push to mobile browsers, PWA-installed devices |
-| **Caching/Pub-Sub** | Redis | Session management, Socket.IO adapter, notification queuing |
-| **Deployment** | Docker + docker-compose | Reproducible, portable deployment for hackathon |
+> **Knowvia** = Knowledge + Via (pathway) — A streamlined knowledge repository and learning management platform, rebuilt from the ground up as a responsive Progressive Web Application.
 
 ---
 
-## 2. User Roles & Permissions
+## 1. Executive Summary
 
-### 2.1 Role Hierarchy
+Knowvia replaces the Nexus platform with a focused, four-feature experience: **Class Scheduling**, **Learning Materials** (file sharing), **Chatbox**, and **Announcements** — plus **Assignment Management** (replacing the old Project Management). The entire platform is architected to deploy **completely free** on free-tier services, with a clean, light-themed UI.
 
-```mermaid
-graph TD
-    ADMIN["🛡️ Admin (Hub Management)"]
-    TUTOR["📚 Tutor / Instructor"]
-    INTERN["🎓 Intern"]
+### What's Removed from Nexus
+- Project management (groups, complex task boards) → replaced by simpler **Assignment Management**
+- Members view (unnecessary overhead)
+- Resource categories/pinning complexity
+- Canvas confetti and decorative dependencies
+- Complex modal system
 
-    ADMIN -->|manages| TUTOR
-    ADMIN -->|manages| INTERN
-    TUTOR -->|oversees| INTERN
-```
+### What's New / Changed
+- Announcements are **auto-generated** when tutors create assignments, schedule classes, or upload materials
+- Announcements are **clickable** — they deep-link to the relevant content
+- **Assignment progress tracker** on student dashboards
+- **Reminder notifications** sent 1 day before scheduled classes
+- Bell icon notification center for students (not a full tab)
+- Clean, light theme with soft minimal colors
 
-### 2.2 Permission Matrix
+---
 
-| Capability | Admin | Tutor | Intern |
-|---|:---:|:---:|:---:|
-| Create/manage departments | ✅ | ❌ | ❌ |
-| Assign tutors to departments | ✅ | ❌ | ❌ |
-| Approve intern registrations | ✅ | ✅ | ❌ |
-| Upload resources | ✅ | ✅ | ❌ |
-| Create announcements | ✅ | ✅ | ❌ |
-| Schedule classes | ✅ | ✅ | ❌ |
-| Create projects & assign groups | ✅ | ✅ | ❌ |
-| Update project tasks/progress | ❌ | ✅ | ✅ (own tasks) |
-| Submit completed work | ❌ | ❌ | ✅ |
-| Give feedback on submissions | ✅ | ✅ | ❌ |
-| Download department resources | ✅ | ✅ | ✅ |
-| Send department messages | ✅ | ✅ | ✅ |
-| View other departments | ✅ | ❌ | ❌ |
-| Manage push notification prefs | ✅ | ✅ | ✅ |
+## 2. Technology Stack & Free-Tier Deployment
+
+### Frontend
+| Concern | Choice | Rationale |
+|---------|--------|-----------|
+| Framework | **Vite + React 19 + TypeScript** | Already in use, fast builds, excellent DX |
+| Styling | **Vanilla CSS** with CSS custom properties | Zero bundle cost, full control, light theme system |
+| Icons | **Lucide React** | Already in use, tree-shakeable, lightweight |
+| Real-time | **Socket.io Client** | Already in use, reliable WebSocket with fallbacks |
+| PWA | **Vite PWA Plugin** (`vite-plugin-pwa`) | Service worker generation, offline caching, installability |
+| Routing | **React Router v7** | Client-side routing for SPA |
+| State | **React Context + useReducer** | No external state library needed for this scope |
+| Hosting | **Vercel** (free tier) | 100GB bandwidth/mo, automatic HTTPS, global CDN |
+
+### Backend
+| Concern | Choice | Rationale |
+|---------|--------|-----------|
+| Runtime | **Express.js + TypeScript** | Already in use, mature ecosystem |
+| ORM | **Prisma** | Already in use, type-safe, excellent migrations |
+| Validation | **Zod** | Already in use, runtime type validation |
+| Auth | **JWT** (access + refresh tokens) | Already in use, stateless, no session store needed |
+| Password | **bcryptjs** | Already in use, pure JS implementation |
+| File Upload | **Multer** (memory storage) → Supabase Storage | Stream to cloud, never persist locally |
+| Push | **web-push** | Already in use, VAPID-based, completely free |
+| Real-time | **Socket.io** | Already in use, department rooms |
+| Scheduling | **node-cron** | Lightweight, runs in-process for reminder jobs |
+| Hosting | **Render** (free tier) | 750 free hours/mo, auto-deploy from Git |
+
+### Database & Storage
+| Concern | Choice | Rationale |
+|---------|--------|-----------|
+| Database | **Supabase PostgreSQL** (free tier) | 500MB storage, 2 free projects, managed Postgres |
+| File Storage | **Supabase Storage** (free tier) | 1GB storage, 2GB bandwidth/mo, S3-compatible |
+| Dev Database | **SQLite** (local only) | Fast local dev, Prisma handles the abstraction |
 
 > [!IMPORTANT]
-> **Department Isolation is enforced at the API/middleware level.** Every API request that touches department-scoped data passes through a `departmentAccessGuard` middleware that verifies the requesting user belongs to that department. This is not a frontend-only concern.
+> **Free-Tier Limits to Be Aware Of**
+> - **Render free tier**: Server spins down after 15 min inactivity (first request after sleep takes ~30s). Acceptable for MVP.
+> - **Supabase free tier**: 500MB database, 1GB file storage, 2GB egress/month. We enforce file size limits (25MB/file) to stay within bounds.
+> - **Vercel free tier**: 100GB bandwidth, 6000 build minutes/month. More than enough.
 
 ---
 
-## 3. Database Schema (PostgreSQL + Prisma)
+## 3. User Roles & Permissions Matrix
 
-### 3.1 Entity-Relationship Diagram
+Three roles: **ADMIN**, **TUTOR**, **INTERN** (student)
+
+| Feature | ADMIN | TUTOR | INTERN |
+|---------|-------|-------|--------|
+| **Class Scheduling** — Create/Edit/Delete | ✅ All depts | ✅ Own dept only | ❌ |
+| **Class Scheduling** — View | ✅ All depts | ✅ Own dept | ✅ Own dept |
+| **Learning Materials** — Upload/Delete | ✅ All depts | ✅ Own dept only | ❌ |
+| **Learning Materials** — View/Download | ✅ All depts | ✅ Own dept | ✅ Own dept |
+| **Chatbox** — Send/Receive | ✅ All depts | ✅ Own dept | ✅ Own dept |
+| **Chatbox** — Reply to message | ✅ | ✅ | ✅ |
+| **Announcements** — Create manually | ✅ All depts (global) | ✅ Own dept only | ❌ |
+| **Announcements** — View | ✅ Full tab | ✅ Full tab | 🔔 Bell icon only |
+| **Assignments** — Create/Edit/Delete | ✅ All depts | ✅ Own dept only | ❌ |
+| **Assignments** — View details | ✅ | ✅ | ✅ Own dept |
+| **Assignments** — Submit work | ❌ | ❌ | ✅ |
+| **Assignments** — Review submissions | ✅ | ✅ Own dept | ❌ |
+| **Department Access** | All departments | Assigned dept(s) | Assigned dept only |
+| **User Management** | ✅ | ❌ | ❌ |
+
+> [!NOTE]
+> **Admin announcement scope**: When an admin creates an announcement, it reflects across **all** departments. When a tutor creates one, it only reflects within their assigned department.
+
+---
+
+## 4. Database Schema (Prisma)
+
+The schema is redesigned from the Nexus schema — simpler, with assignment-focused models replacing the project/group/task hierarchy.
+
+```prisma
+datasource db {
+  provider = "postgresql"      // Supabase PostgreSQL in production
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── USERS & DEPARTMENTS ───────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  avatarUrl    String?
+  role         Role     @default(INTERN)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  departmentMemberships DepartmentMember[]
+  uploadedMaterials     Material[]
+  announcements         Announcement[]
+  scheduledClasses      ClassSchedule[]
+  createdAssignments    Assignment[]
+  submissions           Submission[]
+  submissionReviews     SubmissionReview[]
+  sentMessages          Message[]
+  pushSubscriptions     PushSubscription[]
+  notifications         Notification[]
+}
+
+enum Role {
+  ADMIN
+  TUTOR
+  INTERN
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String
+  icon        String   @default("book-open")
+  colorHex    String   @default("#6366f1")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  members       DepartmentMember[]
+  materials     Material[]
+  announcements Announcement[]
+  schedules     ClassSchedule[]
+  assignments   Assignment[]
+  messages      Message[]
+  notifications Notification[]
+}
+
+model DepartmentMember {
+  id           String       @id @default(uuid())
+  userId       String
+  departmentId String
+  memberRole   MemberRole   @default(INTERN)
+  status       MemberStatus @default(APPROVED)
+  joinedAt     DateTime     @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, departmentId])
+}
+
+enum MemberRole {
+  TUTOR
+  INTERN
+}
+
+enum MemberStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── CLASS SCHEDULING ──────────────────────────────
+
+model ClassSchedule {
+  id            String   @id @default(uuid())
+  departmentId  String
+  scheduledById String
+  title         String
+  description   String   @default("")
+  startTime     DateTime
+  endTime       DateTime
+  location      String   @default("Hub Room A")
+  meetingLink   String?
+  reminderSent  Boolean  @default(false)  // tracks if 1-day reminder was sent
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  scheduler  User       @relation(fields: [scheduledById], references: [id], onDelete: Cascade)
+}
+
+// ─── LEARNING MATERIALS (File Sharing) ─────────────
+
+model Material {
+  id            String   @id @default(uuid())
+  departmentId  String
+  uploadedById  String
+  title         String
+  description   String   @default("")
+  fileName      String           // original filename
+  fileUrl       String           // Supabase Storage URL
+  fileMimeType  String
+  fileSizeBytes Int
+  createdAt     DateTime @default(now())
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  uploader   User       @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+}
+
+// ─── ANNOUNCEMENTS ─────────────────────────────────
+
+model Announcement {
+  id           String            @id @default(uuid())
+  departmentId String?           // null = global (admin-wide)
+  authorId     String
+  title        String
+  content      String
+  priority     AnnouncementPriority @default(NORMAL)
+  // Deep-link metadata: what triggered this announcement
+  sourceType   AnnouncementSource?  // ASSIGNMENT, CLASS_SCHEDULE, MATERIAL, or null (manual)
+  sourceId     String?              // ID of the related entity
+  createdAt    DateTime          @default(now())
+
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  IMPORTANT
+  URGENT
+}
+
+enum AnnouncementSource {
+  ASSIGNMENT
+  CLASS_SCHEDULE
+  MATERIAL
+}
+
+// ─── ASSIGNMENT MANAGEMENT ─────────────────────────
+
+model Assignment {
+  id           String           @id @default(uuid())
+  departmentId String
+  createdById  String
+  title        String
+  description  String
+  status       AssignmentStatus @default(OPEN)
+  dueDate      DateTime?
+  maxFileSize  Int              @default(26214400) // 25MB default
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  department  Department   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  creator     User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  submissions Submission[]
+}
+
+enum AssignmentStatus {
+  OPEN
+  CLOSED
+  GRADED
+}
+
+model Submission {
+  id            String   @id @default(uuid())
+  assignmentId  String
+  submittedById String
+  notes         String   @default("")
+  fileUrl       String?          // Supabase Storage URL
+  fileName      String?
+  fileSizeBytes Int?
+  status        SubmissionStatus @default(SUBMITTED)
+  submittedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assignment Assignment         @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  submitter  User               @relation(fields: [submittedById], references: [id], onDelete: Cascade)
+  reviews    SubmissionReview[]
+
+  @@unique([assignmentId, submittedById]) // one submission per student per assignment
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  NEEDS_REVISION
+  REJECTED
+}
+
+model SubmissionReview {
+  id           String   @id @default(uuid())
+  submissionId String
+  reviewerId   String
+  comment      String
+  verdict      ReviewVerdict @default(NEEDS_REVISION)
+  createdAt    DateTime @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer   User       @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+}
+
+enum ReviewVerdict {
+  APPROVED
+  NEEDS_REVISION
+  REJECTED
+}
+
+// ─── CHAT ──────────────────────────────────────────
+
+model Message {
+  id           String   @id @default(uuid())
+  departmentId String
+  senderId     String
+  content      String
+  replyToId    String?           // reply threading
+  createdAt    DateTime @default(now())
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  sender     User       @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo    Message?   @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies    Message[]  @relation("MessageReplies")
+}
+
+// ─── NOTIFICATIONS & PUSH ──────────────────────────
+
+model Notification {
+  id           String   @id @default(uuid())
+  recipientId  String
+  departmentId String?
+  type         NotificationType
+  title        String
+  body         String
+  actionUrl    String           // deep-link path within the app
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  recipient  User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+  CLASS_SCHEDULE
+  CLASS_REMINDER
+  ASSIGNMENT_CREATED
+  SUBMISSION_REVIEWED
+  MATERIAL_UPLOADED
+  MESSAGE
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+```
+
+### Entity Relationship Diagram
 
 ```mermaid
 erDiagram
     User ||--o{ DepartmentMember : "belongs to"
-    Department ||--o{ DepartmentMember : "has members"
-    Department ||--o{ Resource : "contains"
-    Department ||--o{ Announcement : "has"
-    Department ||--o{ ClassSchedule : "schedules"
-    Department ||--o{ Project : "owns"
-    Department ||--o{ Message : "hosts messages"
-
-    User ||--o{ Resource : "uploads"
-    User ||--o{ Announcement : "creates"
+    Department ||--o{ DepartmentMember : "has"
     User ||--o{ ClassSchedule : "schedules"
+    Department ||--o{ ClassSchedule : "hosts"
+    User ||--o{ Material : "uploads"
+    Department ||--o{ Material : "contains"
+    User ||--o{ Announcement : "authors"
+    Department ||--o{ Announcement : "scoped to"
+    User ||--o{ Assignment : "creates"
+    Department ||--o{ Assignment : "belongs to"
+    Assignment ||--o{ Submission : "receives"
+    User ||--o{ Submission : "submits"
+    Submission ||--o{ SubmissionReview : "reviewed by"
+    User ||--o{ SubmissionReview : "reviews"
     User ||--o{ Message : "sends"
-    User ||--o{ PushSubscription : "subscribes"
-
-    Project ||--o{ ProjectGroup : "has groups"
-    ProjectGroup ||--o{ ProjectGroupMember : "has members"
-    User ||--o{ ProjectGroupMember : "assigned to"
-    Project ||--o{ Task : "has tasks"
-    Task ||--o{ TaskAssignment : "assigned to"
-    User ||--o{ TaskAssignment : "works on"
-    Task ||--o{ TaskSubmission : "receives"
-    User ||--o{ TaskSubmission : "submits"
-    TaskSubmission ||--o{ SubmissionFeedback : "gets feedback"
-    User ||--o{ SubmissionFeedback : "gives feedback"
-
-    User {
-        uuid id PK
-        string email UK
-        string passwordHash
-        string firstName
-        string lastName
-        string avatarUrl
-        enum role "ADMIN | TUTOR | INTERN"
-        boolean isActive
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    Department {
-        uuid id PK
-        string name UK
-        string slug UK
-        string description
-        string iconUrl
-        string colorHex
-        boolean isActive
-        datetime createdAt
-    }
-
-    DepartmentMember {
-        uuid id PK
-        uuid userId FK
-        uuid departmentId FK
-        enum role "TUTOR | INTERN"
-        enum status "PENDING | APPROVED | REJECTED"
-        datetime joinedAt
-    }
-
-    Resource {
-        uuid id PK
-        uuid departmentId FK
-        uuid uploadedById FK
-        string title
-        text description
-        string fileUrl
-        string fileName
-        string fileMimeType
-        bigint fileSizeBytes
-        enum category "LECTURE | TUTORIAL | EXERCISE | REFERENCE | OTHER"
-        string[] tags
-        boolean isPinned
-        datetime createdAt
-    }
-
-    Announcement {
-        uuid id PK
-        uuid departmentId FK
-        uuid authorId FK
-        string title
-        text content
-        enum priority "NORMAL | IMPORTANT | URGENT"
-        boolean isPinned
-        datetime createdAt
-    }
-
-    ClassSchedule {
-        uuid id PK
-        uuid departmentId FK
-        uuid scheduledById FK
-        string title
-        text description
-        datetime startTime
-        datetime endTime
-        string location
-        string meetingLink
-        boolean isRecurring
-        string recurrenceRule
-        datetime createdAt
-    }
-
-    Project {
-        uuid id PK
-        uuid departmentId FK
-        uuid createdById FK
-        string title
-        text description
-        enum status "PLANNING | IN_PROGRESS | REVIEW | COMPLETED"
-        datetime startDate
-        datetime dueDate
-        datetime createdAt
-    }
-
-    ProjectGroup {
-        uuid id PK
-        uuid projectId FK
-        string name
-        text description
-    }
-
-    ProjectGroupMember {
-        uuid id PK
-        uuid groupId FK
-        uuid userId FK
-        enum role "LEAD | MEMBER"
-        datetime assignedAt
-    }
-
-    Task {
-        uuid id PK
-        uuid projectId FK
-        uuid projectGroupId FK
-        string title
-        text description
-        enum status "TODO | IN_PROGRESS | IN_REVIEW | DONE"
-        enum priority "LOW | MEDIUM | HIGH | CRITICAL"
-        datetime dueDate
-        integer sortOrder
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    TaskAssignment {
-        uuid id PK
-        uuid taskId FK
-        uuid userId FK
-        datetime assignedAt
-    }
-
-    TaskSubmission {
-        uuid id PK
-        uuid taskId FK
-        uuid submittedById FK
-        text notes
-        string[] fileUrls
-        datetime submittedAt
-    }
-
-    SubmissionFeedback {
-        uuid id PK
-        uuid submissionId FK
-        uuid reviewerId FK
-        text comment
-        enum verdict "APPROVED | NEEDS_REVISION | REJECTED"
-        datetime createdAt
-    }
-
-    Message {
-        uuid id PK
-        uuid departmentId FK
-        uuid senderId FK
-        text content
-        string[] attachmentUrls
-        uuid replyToId FK "nullable, self-ref"
-        datetime createdAt
-    }
-
-    PushSubscription {
-        uuid id PK
-        uuid userId FK
-        json endpoint
-        json keys
-        string userAgent
-        datetime createdAt
-    }
-
-    Notification {
-        uuid id PK
-        uuid recipientId FK
-        uuid departmentId FK
-        enum type "ANNOUNCEMENT | CLASS_SCHEDULE | PROJECT_UPDATE | TASK_ASSIGNED | FEEDBACK | MESSAGE"
-        string title
-        text body
-        string actionUrl
-        boolean isRead
-        datetime createdAt
-    }
+    Department ||--o{ Message : "hosts"
+    Message ||--o{ Message : "replies to"
+    User ||--o{ Notification : "receives"
+    User ||--o{ PushSubscription : "registers"
 ```
-
-### 3.2 Key Design Decisions
-
-| Decision | Rationale |
-|---|---|
-| **`DepartmentMember` join table with `status`** | Supports an approval workflow — interns request to join, tutors/admins approve. Prevents unauthorized department access. |
-| **`ProjectGroup` entity** | Allows a project to have multiple sub-teams (Group A works on frontend, Group B on backend). Tutors assign interns to groups. |
-| **`Task` linked to both `Project` and `ProjectGroup`** | Tasks belong to a project but can be scoped to a specific group within that project. |
-| **`TaskSubmission` + `SubmissionFeedback`** | Clean separation between intern deliverables and tutor reviews. Supports revision cycles. |
-| **`PushSubscription` stored per user** | A user can have multiple subscriptions (laptop browser + phone PWA). Each device gets its own push subscription. |
-| **`Notification` table** | Persistent notification history. Even if push delivery fails, the user sees notifications in-app. |
-| **`string[]` for tags/fileUrls** | PostgreSQL native array type — simple, queryable, no extra join tables needed. |
-| **UUIDs everywhere** | Non-sequential, non-guessable IDs — better security than auto-increment integers. |
 
 ---
 
-## 4. API Structure (RESTful)
+## 5. API Architecture
 
-### 4.1 Route Map
+Base URL: `/api/v1`
 
-All routes prefixed with `/api/v1`. Department-scoped routes enforce membership via middleware.
+### Authentication
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/auth/register` | Register new user | Public |
+| POST | `/auth/login` | Login, returns JWT + user | Public |
+| GET | `/auth/me` | Get current user profile | JWT |
+| POST | `/auth/refresh` | Refresh access token | Refresh token |
 
-```
-Auth
-├── POST   /auth/register              — Register new user
-├── POST   /auth/login                 — Login, returns JWT pair
-├── POST   /auth/refresh               — Refresh access token
-├── POST   /auth/logout                — Invalidate refresh token
-└── GET    /auth/me                    — Get current user profile
+### Class Schedules
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/departments/:slug/schedules` | List schedules for department | JWT + Dept member |
+| POST | `/departments/:slug/schedules` | Create a class schedule | JWT + TUTOR/ADMIN |
+| PUT | `/departments/:slug/schedules/:id` | Update a schedule | JWT + Creator/ADMIN |
+| DELETE | `/departments/:slug/schedules/:id` | Delete a schedule | JWT + Creator/ADMIN |
 
-Users (Admin)
-├── GET    /users                      — List all users (admin)
-├── PATCH  /users/:id                  — Update user (admin)
-└── DELETE /users/:id                  — Deactivate user (admin)
+### Learning Materials
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/departments/:slug/materials` | List materials | JWT + Dept member |
+| POST | `/departments/:slug/materials` | Upload a material (multipart) | JWT + TUTOR/ADMIN |
+| GET | `/departments/:slug/materials/:id/download` | Get signed download URL | JWT + Dept member |
+| DELETE | `/departments/:slug/materials/:id` | Delete a material | JWT + Uploader/ADMIN |
 
-Departments
-├── GET    /departments                — List departments (public names only)
-├── POST   /departments                — Create department (admin)
-├── GET    /departments/:slug          — Get department details (members only)
-├── PATCH  /departments/:slug          — Update department (admin)
-├── POST   /departments/:slug/join     — Request to join (intern)
-├── GET    /departments/:slug/members  — List members (members only)
-└── PATCH  /departments/:slug/members/:id — Approve/reject member (tutor/admin)
+### Announcements
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/departments/:slug/announcements` | List dept announcements | JWT + Dept member |
+| GET | `/announcements/global` | List global announcements | JWT |
+| POST | `/departments/:slug/announcements` | Create announcement | JWT + TUTOR/ADMIN |
+| POST | `/announcements/global` | Create global announcement | JWT + ADMIN |
 
-Resources (department-scoped)
-├── GET    /departments/:slug/resources          — List resources
-├── POST   /departments/:slug/resources          — Upload resource (tutor)
-├── GET    /departments/:slug/resources/:id      — Get resource details
-├── PATCH  /departments/:slug/resources/:id      — Update resource (tutor)
-├── DELETE /departments/:slug/resources/:id      — Delete resource (tutor)
-└── GET    /departments/:slug/resources/:id/download — Download file
+### Assignments
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/departments/:slug/assignments` | List assignments | JWT + Dept member |
+| POST | `/departments/:slug/assignments` | Create assignment | JWT + TUTOR/ADMIN |
+| GET | `/departments/:slug/assignments/:id` | Get assignment details + submissions | JWT + Dept member |
+| PUT | `/departments/:slug/assignments/:id` | Update assignment | JWT + Creator/ADMIN |
+| DELETE | `/departments/:slug/assignments/:id` | Delete assignment | JWT + Creator/ADMIN |
+| POST | `/departments/:slug/assignments/:id/submit` | Submit work (multipart) | JWT + INTERN |
+| PUT | `/departments/:slug/assignments/:id/submissions/:subId/review` | Review a submission | JWT + TUTOR/ADMIN |
 
-Announcements (department-scoped)
-├── GET    /departments/:slug/announcements      — List announcements
-├── POST   /departments/:slug/announcements      — Create announcement (tutor)
-├── GET    /departments/:slug/announcements/:id  — Get announcement
-└── DELETE /departments/:slug/announcements/:id  — Delete announcement (tutor)
+### Chat Messages
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/departments/:slug/messages` | Get message history (paginated) | JWT + Dept member |
 
-Class Schedules (department-scoped)
-├── GET    /departments/:slug/schedules          — List scheduled classes
-├── POST   /departments/:slug/schedules          — Schedule class (tutor)
-├── PATCH  /departments/:slug/schedules/:id      — Update schedule (tutor)
-└── DELETE /departments/:slug/schedules/:id      — Cancel class (tutor)
+> Real-time messaging is handled via Socket.io, not REST. The GET endpoint is for loading history on page load.
 
-Projects (department-scoped)
-├── GET    /departments/:slug/projects           — List projects
-├── POST   /departments/:slug/projects           — Create project (tutor)
-├── GET    /departments/:slug/projects/:id       — Get project with groups & tasks
-├── PATCH  /departments/:slug/projects/:id       — Update project (tutor)
-│
-├── POST   /departments/:slug/projects/:id/groups          — Create group (tutor)
-├── POST   /departments/:slug/projects/:id/groups/:gid/members — Add member to group (tutor)
-│
-├── GET    /departments/:slug/projects/:id/tasks           — List tasks (with filters)
-├── POST   /departments/:slug/projects/:id/tasks           — Create task (tutor)
-├── PATCH  /departments/:slug/projects/:id/tasks/:tid      — Update task status (assigned intern or tutor)
-│
-├── POST   /departments/:slug/projects/:id/tasks/:tid/submissions  — Submit work (intern)
-├── GET    /departments/:slug/projects/:id/tasks/:tid/submissions  — View submissions
-└── POST   /departments/:slug/projects/:id/tasks/:tid/submissions/:sid/feedback — Give feedback (tutor)
+### Notifications
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/notifications` | Get user's notifications (paginated) | JWT |
+| PUT | `/notifications/:id/read` | Mark notification as read | JWT |
+| PUT | `/notifications/read-all` | Mark all as read | JWT |
+| POST | `/push/subscribe` | Register push subscription | JWT |
+| DELETE | `/push/unsubscribe` | Remove push subscription | JWT |
 
-Messages (department-scoped, real-time via WebSocket)
-├── GET    /departments/:slug/messages           — Load message history (paginated)
-└── POST   /departments/:slug/messages           — Send message (also broadcast via WS)
-
-Notifications
-├── GET    /notifications                        — Get user's notifications (paginated)
-├── PATCH  /notifications/:id/read               — Mark as read
-├── PATCH  /notifications/read-all               — Mark all as read
-├── POST   /push/subscribe                       — Register push subscription
-└── DELETE /push/subscribe                       — Unregister push subscription
-```
-
-### 4.2 Middleware Pipeline
-
-```mermaid
-graph LR
-    REQ["Incoming Request"] --> CORS["CORS"]
-    CORS --> RATE["Rate Limiter"]
-    RATE --> PARSE["Body Parser + File Upload (Multer)"]
-    PARSE --> AUTH["JWT Auth Middleware"]
-    AUTH --> DEPT["Department Access Guard"]
-    DEPT --> ROLE["Role Permission Check"]
-    ROLE --> HANDLER["Route Handler"]
-    HANDLER --> RES["Response"]
-```
-
-| Middleware | Purpose |
-|---|---|
-| **CORS** | Restrict origins to the PWA domain |
-| **Rate Limiter** | Prevent abuse (e.g., 100 req/min per IP, stricter on auth routes) |
-| **JWT Auth** | Verify access token, attach `req.user` with `{ id, role }` |
-| **Department Access Guard** | For `/departments/:slug/*` routes — verify `DepartmentMember` exists and is `APPROVED` |
-| **Role Permission Check** | Route-specific — e.g., only `TUTOR` can POST to `/resources` |
+### Departments (Admin)
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/departments` | List all departments | JWT |
+| GET | `/departments/:slug` | Get department details | JWT + Dept member |
 
 ---
 
-## 5. Security Architecture
+## 6. Real-Time Architecture (Socket.io)
 
-### 5.1 Authentication Flow
+### Room Strategy
+```
+user:{userId}          → Personal notifications
+dept:{departmentSlug}  → Department-scoped events (chat, announcements, schedules)
+global                 → Admin-wide announcements
+```
 
+### Events
+| Event | Direction | Payload | Description |
+|-------|-----------|---------|-------------|
+| `message:send` | Client → Server | `{ departmentSlug, content, replyToId? }` | Send chat message |
+| `message:new` | Server → Client | Full message object with sender | New message broadcast to dept room |
+| `announcement:new` | Server → Client | Announcement object | New announcement (dept or global room) |
+| `schedule:new` | Server → Client | ClassSchedule object | New class scheduled |
+| `schedule:updated` | Server → Client | ClassSchedule object | Schedule modified |
+| `assignment:new` | Server → Client | Assignment object | New assignment created |
+| `material:new` | Server → Client | Material metadata | New material uploaded |
+| `notification:new` | Server → Client | Notification object | Personal notification pushed |
+| `typing:start` | Client → Server | `{ departmentSlug }` | User started typing |
+| `typing:stop` | Client → Server | `{ departmentSlug }` | User stopped typing |
+| `user:typing` | Server → Client | `{ userId, name, departmentSlug }` | Typing indicator broadcast |
+
+---
+
+## 7. File Security & Upload Strategy
+
+> [!CAUTION]
+> File security is critical. Since we accept **any file type**, we must validate rigorously server-side.
+
+### Upload Flow
 ```mermaid
 sequenceDiagram
-    participant Client as PWA Client
-    participant API as API Server
-    participant DB as Database
-    participant Redis as Redis
-
-    Client->>API: POST /auth/login { email, password }
-    API->>DB: Find user by email
-    DB-->>API: User record
-    API->>API: bcrypt.compare(password, hash)
-    API->>API: Generate JWT access token (15min) + refresh token (7d)
-    API->>Redis: Store refresh token (keyed by user ID)
-    API-->>Client: { accessToken, refreshToken, user }
-
-    Note over Client: Access token stored in memory (Zustand)
-    Note over Client: Refresh token stored in httpOnly cookie
-
-    Client->>API: GET /departments/cybersecurity/resources
-    Note over Client,API: Authorization: Bearer <accessToken>
-    API->>API: Verify JWT → extract userId, role
-    API->>DB: Verify DepartmentMember(userId, departmentId, status=APPROVED)
-    DB-->>API: Membership confirmed
-    API->>DB: Fetch resources
-    API-->>Client: Resources list
-```
-
-### 5.2 Security Measures
-
-| Measure | Implementation |
-|---|---|
-| **Password Hashing** | bcrypt with cost factor 12 |
-| **JWT Access Tokens** | Short-lived (15 min), stored in memory only |
-| **Refresh Tokens** | Long-lived (7 days), httpOnly + Secure + SameSite cookie, stored in Redis for revocation |
-| **Department Isolation** | Server-side middleware checks `DepartmentMember` table on every request. No client-side trust. |
-| **Input Validation** | Zod schemas on all request bodies and params |
-| **File Upload Security** | MIME type validation, file size limits (50MB default), virus scanning (ClamAV optional), sanitized filenames |
-| **SQL Injection** | Prisma ORM parameterized queries (built-in protection) |
-| **XSS Protection** | Content Security Policy headers, sanitized user-generated content (DOMPurify) |
-| **Rate Limiting** | express-rate-limit: 100 req/min general, 5 req/min on auth endpoints |
-| **HTTPS** | Enforced in production via reverse proxy (nginx) |
-
-### 5.3 Department Isolation — Detailed
-
-```
-Cybersecurity Intern logs in
-    → JWT contains { userId: "abc", role: "INTERN" }
-    → Tries GET /departments/data-analysis/resources
-    → departmentAccessGuard middleware:
-        1. Resolves "data-analysis" slug → departmentId
-        2. Queries DepartmentMember WHERE userId="abc" AND departmentId=... AND status="APPROVED"
-        3. No record found → 403 Forbidden
-    → Request blocked. Zero data leakage.
-```
-
----
-
-## 6. File Storage Architecture
-
-### 6.1 Storage Strategy
-
-```mermaid
-graph LR
-    UPLOAD["File Upload (Multer)"] --> VALIDATE["Validate MIME + Size"]
-    VALIDATE --> RENAME["Generate UUID filename"]
-    RENAME --> S3["Upload to S3/Supabase Storage"]
-    S3 --> DB_RECORD["Save metadata to DB (Resource/TaskSubmission)"]
-    DB_RECORD --> SIGNED["Generate signed download URL on request"]
-```
-
-| Aspect | Design |
-|---|---|
-| **Storage Backend** | Supabase Storage (S3-compatible) — free tier sufficient for hackathon |
-| **Bucket Structure** | `nexus-files/{departmentSlug}/resources/`, `nexus-files/{departmentSlug}/projects/{projectId}/submissions/`, `nexus-files/messages/attachments/` |
-| **File Naming** | `{uuid}-{sanitized-original-name}` — prevents collisions and directory traversal |
-| **Access Control** | Signed URLs with expiry (1 hour) — files are never publicly accessible |
-| **Supported Types** | No restriction on file type (PDFs, videos, ZIPs, PSD, Blender files, etc.) |
-| **Size Limits** | 50MB per file (configurable), 200MB total per upload batch |
-| **Metadata Stored** | Original filename, MIME type, size in bytes, uploader ID, upload timestamp |
-
----
-
-## 7. Real-Time & Push Notification Architecture
-
-### 7.1 WebSocket (Socket.IO) — Department Chat
-
-```mermaid
-sequenceDiagram
-    participant Intern as Intern (PWA)
-    participant WS as Socket.IO Server
-    participant Redis as Redis Pub/Sub
-    participant DB as PostgreSQL
-
-    Intern->>WS: Connect with JWT token
-    WS->>WS: Verify JWT, extract userId
-    WS->>DB: Get user's approved departments
-    WS->>WS: Auto-join rooms: "dept:cybersecurity", "dept:web-dev"
-
-    Intern->>WS: emit("message:send", { departmentSlug, content })
-    WS->>DB: Persist message
-    WS->>Redis: Publish to "dept:cybersecurity" channel
-    Redis-->>WS: Fan out to all connected members
-    WS-->>Intern: emit("message:new", { message })
-```
-
-**Room Strategy:**
-- Each department gets a Socket.IO room: `dept:{slug}`
-- Users auto-join rooms for their approved departments on connect
-- Messages are broadcast only to the department room
-- Redis adapter enables horizontal scaling (multiple server instances)
-
-### 7.2 Push Notifications (Web Push API)
-
-```mermaid
-sequenceDiagram
-    participant Tutor as Tutor (PWA)
-    participant API as API Server
-    participant DB as PostgreSQL
-    participant Push as Web Push Service
-    participant Intern as Intern's Phone
-
-    Tutor->>API: POST /departments/cybersecurity/announcements
-    API->>DB: Save announcement
-    API->>DB: Query all APPROVED members of cybersecurity dept
-    API->>DB: Get PushSubscriptions for those members
-    loop For each subscription
-        API->>Push: web-push.sendNotification(subscription, payload)
-        Push-->>Intern: OS-level push notification
+    participant Client
+    participant Server as Express Server
+    participant Validator as File Validator
+    participant Storage as Supabase Storage
+    
+    Client->>Server: POST multipart/form-data
+    Server->>Server: Multer (memory storage, 25MB limit)
+    Server->>Validator: Validate file
+    Validator->>Validator: 1. Check file size ≤ 25MB
+    Validator->>Validator: 2. Read magic bytes (file signature)
+    Validator->>Validator: 3. Compare magic bytes vs declared MIME
+    Validator->>Validator: 4. Block dangerous extensions (.exe, .bat, .cmd, .sh, .ps1, .vbs, .dll, .scr, etc.)
+    Validator->>Validator: 5. Sanitize filename (strip path traversal, special chars)
+    Validator->>Validator: 6. Generate unique storage key (UUID prefix)
+    Validator-->>Server: Validation result
+    alt Validation fails
+        Server-->>Client: 400 Bad Request with reason
+    else Validation passes
+        Server->>Storage: Upload buffer to Supabase Storage
+        Storage-->>Server: Public/signed URL
+        Server->>Server: Save metadata to DB
+        Server-->>Client: 201 Created with material/submission metadata
     end
-    API->>DB: Create Notification records for each member
 ```
 
-**Push Notification Triggers:**
-| Event | Recipients | Payload |
-|---|---|---|
-| New Announcement | All dept members | `{ title, body, url: /dept/announcements/:id }` |
-| Class Scheduled/Updated | All dept members | `{ title, body, url: /dept/schedule }` |
-| Task Assigned | Assigned intern(s) | `{ title, body, url: /dept/projects/:pid/tasks/:tid }` |
-| Submission Feedback | Submitting intern | `{ title, body, url: /dept/projects/:pid/tasks/:tid }` |
-| New Message (if offline) | Dept members not connected via WS | `{ title, body, url: /dept/messages }` |
-
-**PWA Service Worker** handles:
-- Push event listener → show OS notification
-- Notification click → open/focus the PWA at the relevant URL
-- Background sync for offline message queuing
+### Security Measures
+1. **Magic byte validation**: Read first bytes of file to verify actual type matches declared MIME type (prevents `.exe` renamed to `.pdf`)
+2. **Extension blocklist**: Block executable extensions: `.exe`, `.bat`, `.cmd`, `.sh`, `.ps1`, `.vbs`, `.dll`, `.scr`, `.msi`, `.com`, `.pif`, `.hta`, `.cpl`, `.inf`, `.reg`, `.ws`, `.wsf`, `.jar`
+3. **File size enforcement**: Hard limit at **25MB per file** (configurable via env). Multer rejects before buffering completes.
+4. **Filename sanitization**: Strip path traversal (`../`), null bytes, and special characters. Prefix with UUID.
+5. **Storage isolation**: Files stored in Supabase Storage with **signed URLs** (time-limited access, not public). Only authenticated, department-authorized users can generate download URLs.
+6. **Content-Disposition**: Force `attachment` disposition on downloads to prevent browser execution of uploaded HTML/SVG/JS files.
+7. **CORS on Storage**: Supabase bucket configured to only accept requests from our domain.
+8. **Rate limiting**: Limit upload requests to prevent storage abuse (e.g., 10 uploads/hour per user).
 
 ---
 
-## 8. Frontend Architecture
+## 8. Announcement Auto-Generation & Deep Linking
 
-### 8.1 Project Structure
+### Auto-Generation Flow
+When a tutor/admin performs any of these actions, an announcement is **automatically created**:
 
-```
-nexus/
-├── src/
-│   ├── app/                          # Next.js App Router
-│   │   ├── (auth)/                   # Auth layout group
-│   │   │   ├── login/page.tsx
-│   │   │   └── register/page.tsx
-│   │   ├── (dashboard)/              # Authenticated layout group
-│   │   │   ├── layout.tsx            # Sidebar + topbar + dept context
-│   │   │   ├── page.tsx              # Dashboard home (dept overview)
-│   │   │   ├── resources/page.tsx
-│   │   │   ├── announcements/page.tsx
-│   │   │   ├── schedule/page.tsx
-│   │   │   ├── projects/
-│   │   │   │   ├── page.tsx          # Projects list
-│   │   │   │   └── [projectId]/
-│   │   │   │       ├── page.tsx      # Kanban board / overview
-│   │   │   │       └── tasks/[taskId]/page.tsx
-│   │   │   ├── messages/page.tsx
-│   │   │   └── settings/page.tsx
-│   │   ├── admin/                    # Admin-only routes
-│   │   │   ├── departments/page.tsx
-│   │   │   └── users/page.tsx
-│   │   ├── layout.tsx                # Root layout
-│   │   └── globals.css
-│   ├── components/
-│   │   ├── ui/                       # Reusable primitives (Button, Modal, Card, etc.)
-│   │   ├── resources/                # ResourceCard, ResourceUploadModal
-│   │   ├── projects/                 # KanbanBoard, TaskCard, SubmissionForm
-│   │   ├── messages/                 # ChatWindow, MessageBubble
-│   │   ├── schedule/                 # CalendarView, ScheduleForm
-│   │   └── layout/                   # Sidebar, Topbar, DepartmentSwitcher
-│   ├── stores/                       # Zustand stores
-│   │   ├── authStore.ts              # User, tokens, login/logout
-│   │   ├── departmentStore.ts        # Active department context
-│   │   ├── notificationStore.ts      # Unread count, notification list
-│   │   └── socketStore.ts            # Socket.IO connection state
-│   ├── hooks/                        # Custom React hooks
-│   │   ├── useAuth.ts
-│   │   ├── useDepartment.ts
-│   │   ├── useSocket.ts
-│   │   └── usePushNotifications.ts
-│   ├── lib/
-│   │   ├── api.ts                    # Axios instance with interceptors
-│   │   ├── socket.ts                 # Socket.IO client setup
-│   │   ├── push.ts                   # Push subscription helpers
-│   │   └── utils.ts
-│   ├── types/                        # Shared TypeScript interfaces
-│   └── public/
-│       ├── manifest.json             # PWA manifest
-│       ├── sw.js                     # Service worker
-│       └── icons/                    # PWA icons
-├── server/
-│   ├── src/
-│   │   ├── index.ts                  # Express + Socket.IO bootstrap
-│   │   ├── config/
-│   │   │   ├── database.ts           # Prisma client
-│   │   │   ├── redis.ts
-│   │   │   └── storage.ts            # S3/Supabase client
-│   │   ├── middleware/
-│   │   │   ├── auth.ts               # JWT verification
-│   │   │   ├── departmentGuard.ts    # Department membership check
-│   │   │   ├── roleGuard.ts          # Role-based permission check
-│   │   │   ├── rateLimiter.ts
-│   │   │   └── upload.ts             # Multer config
-│   │   ├── routes/
-│   │   │   ├── auth.routes.ts
-│   │   │   ├── department.routes.ts
-│   │   │   ├── resource.routes.ts
-│   │   │   ├── announcement.routes.ts
-│   │   │   ├── schedule.routes.ts
-│   │   │   ├── project.routes.ts
-│   │   │   ├── message.routes.ts
-│   │   │   └── notification.routes.ts
-│   │   ├── controllers/              # Request handlers
-│   │   ├── services/                 # Business logic
-│   │   ├── validators/               # Zod schemas
-│   │   ├── socket/                   # Socket.IO event handlers
-│   │   │   └── chat.handler.ts
-│   │   └── utils/
-│   │       ├── pushNotification.ts   # Web Push helper
-│   │       └── fileUpload.ts
-│   └── prisma/
-│       ├── schema.prisma             # Database schema
-│       └── seed.ts                   # Seed departments + admin user
-├── docker-compose.yml
-├── Dockerfile.client
-├── Dockerfile.server
-├── package.json
-└── .env.example
+| Action | Announcement Title Pattern | Deep Link |
+|--------|---------------------------|-----------|
+| Create Assignment | "📝 New Assignment: {title}" | `/assignments/{id}` |
+| Schedule Class | "📅 Class Scheduled: {title} on {date}" | `/schedule` (highlighted) |
+| Upload Material | "📚 New Material: {title}" | `/materials/{id}` |
+
+### Deep Link Behavior
+- Each announcement stores `sourceType` (ASSIGNMENT, CLASS_SCHEDULE, MATERIAL) and `sourceId`
+- When a student clicks an announcement in the bell notification panel, the app navigates to the appropriate view:
+  - `ASSIGNMENT` → Opens Assignment Management page, scrolls to/highlights that assignment
+  - `CLASS_SCHEDULE` → Opens Schedule view, highlights the relevant class
+  - `MATERIAL` → Opens Learning Materials view, highlights the file
+
+---
+
+## 9. Push Notifications & Class Reminders
+
+### Push Notification Flow
+```mermaid
+sequenceDiagram
+    participant Server as Express Server
+    participant DB as PostgreSQL
+    participant Push as Web Push API
+    participant Device as User's Device
+
+    Server->>DB: Create Notification record
+    Server->>DB: Fetch recipient's PushSubscriptions
+    loop Each subscription
+        Server->>Push: webpush.sendNotification(subscription, payload)
+        Push->>Device: Push notification displayed
+    end
 ```
 
-### 8.2 State Management Strategy
+### Class Reminder System
+A **node-cron** job runs every hour on the server:
+
+```
+Schedule: "0 * * * *" (every hour, on the hour)
+```
+
+1. Query all `ClassSchedule` records where:
+   - `startTime` is within the next 24 hours AND
+   - `reminderSent` is `false`
+2. For each matching schedule:
+   - Fetch all department members (INTERN + TUTOR)
+   - Create `Notification` records with type `CLASS_REMINDER`
+   - Send push notifications to all members' subscriptions
+   - Set `reminderSent = true`
+
+> [!NOTE]
+> Since Render free tier may spin down the server, the cron job runs on server startup AND hourly. If the server sleeps and wakes up, it immediately checks for any missed reminders.
+
+---
+
+## 10. Frontend Architecture
+
+### Page / Route Structure
+
+```
+/                          → Redirect to /login or /dashboard
+/login                     → Login page
+/register                  → Registration page
+/dashboard                 → Role-based dashboard (main view)
+/schedule                  → Class schedule view
+/materials                 → Learning Materials (tutors: upload + list, students: list only)
+/chat                      → Department chatbox
+/assignments               → Assignment management
+/assignments/:id           → Assignment detail + submission
+/announcements             → Announcements tab (tutors/admin only route)
+```
+
+### Component Hierarchy
+
+```
+App
+├── AuthProvider (Context: user, token, login, logout, register)
+├── SocketProvider (Context: socket instance, connection state)
+├── NotificationProvider (Context: notifications, unread count, mark read)
+│
+├── PublicRoutes
+│   ├── LoginPage
+│   └── RegisterPage
+│
+└── ProtectedRoutes (requires auth)
+    ├── AppLayout
+    │   ├── Sidebar (navigation, department selector)
+    │   ├── TopBar
+    │   │   ├── Search (future)
+    │   │   ├── NotificationBell (students: opens dropdown panel)
+    │   │   └── UserMenu (profile, logout)
+    │   │
+    │   └── MainContent (route-based)
+    │       ├── DashboardPage
+    │       │   ├── [TUTOR/ADMIN] ScheduleWidget (primary, large)
+    │       │   ├── [TUTOR/ADMIN] RecentMaterialsWidget
+    │       │   ├── [TUTOR/ADMIN] AssignmentOverviewWidget
+    │       │   ├── [INTERN] UpcomingClassesWidget (primary, large)
+    │       │   ├── [INTERN] AssignmentProgressTracker
+    │       │   │   ├── Progress meter / summary chart
+    │       │   │   ├── Primary assignment view
+    │       │   │   └── Recent status updates
+    │       │   └── [INTERN] RecentAnnouncementsWidget
+    │       │
+    │       ├── SchedulePage
+    │       │   ├── CalendarView / ListView toggle
+    │       │   ├── ScheduleCard (per class)
+    │       │   └── [TUTOR/ADMIN] CreateScheduleForm
+    │       │
+    │       ├── MaterialsPage
+    │       │   ├── MaterialsList (filterable, searchable)
+    │       │   ├── MaterialCard (title, type icon, size, download)
+    │       │   └── [TUTOR/ADMIN] UploadMaterialForm
+    │       │
+    │       ├── ChatPage
+    │       │   ├── MessageList (scrollable, auto-scroll)
+    │       │   ├── MessageBubble (sender name, timestamp, reply indicator)
+    │       │   ├── ReplyPreview (when replying to a specific message)
+    │       │   └── MessageInput (text only, no emojis)
+    │       │
+    │       ├── AssignmentsPage
+    │       │   ├── AssignmentsList
+    │       │   ├── AssignmentCard (title, due date, status, submission count)
+    │       │   └── [TUTOR/ADMIN] CreateAssignmentForm
+    │       │
+    │       ├── AssignmentDetailPage
+    │       │   ├── AssignmentInfo (description, due date, creator)
+    │       │   ├── [INTERN] SubmissionForm (file upload + notes)
+    │       │   ├── [INTERN] MySubmissionStatus
+    │       │   └── [TUTOR/ADMIN] SubmissionsList + ReviewForm
+    │       │
+    │       └── AnnouncementsPage (TUTOR/ADMIN only)
+    │           ├── AnnouncementsList (all, including auto-generated)
+    │           └── CreateAnnouncementForm
+    │
+    └── NotificationPanel (overlay/dropdown for INTERN bell icon)
+        ├── NotificationItem (clickable, deep-links to source)
+        └── MarkAllReadButton
+```
+
+### State Management
 
 ```mermaid
 graph TD
-    subgraph "Zustand (Client State)"
-        AUTH["authStore: user, tokens, isAuthenticated"]
-        DEPT["departmentStore: activeDepartment, myDepartments"]
-        NOTIF["notificationStore: unreadCount, notifications"]
-        SOCKET["socketStore: isConnected, activeRoom"]
-    end
-
-    subgraph "React Query (Server State)"
-        RQ_RES["useResources(deptSlug)"]
-        RQ_ANN["useAnnouncements(deptSlug)"]
-        RQ_PROJ["useProjects(deptSlug)"]
-        RQ_TASKS["useTasks(projectId)"]
-        RQ_MSG["useMessages(deptSlug)"]
-        RQ_SCHED["useSchedules(deptSlug)"]
-    end
-
-    DEPT -->|"deptSlug as query key"| RQ_RES
-    DEPT -->|"deptSlug as query key"| RQ_ANN
-    DEPT -->|"deptSlug as query key"| RQ_PROJ
-    DEPT -->|"deptSlug as query key"| RQ_SCHED
-    AUTH -->|"token for API calls"| RQ_RES
+    A["AuthContext"] --> B["Stores: user, token, role, departments"]
+    C["SocketContext"] --> D["Stores: socket instance, connected status"]
+    E["NotificationContext"] --> F["Stores: notifications[], unreadCount"]
+    G["DepartmentContext"] --> H["Stores: activeDepartment, departmentSlug"]
+    
+    A --> C
+    A --> E
+    G --> I["All data-fetching hooks use activeDepartment"]
 ```
 
-**Why this split?**
-- **Zustand** for true client state (who's logged in, which department is active, socket connection status) — lightweight, no boilerplate.
-- **React Query** for server-state (resources, projects, messages) — automatic caching, background refetching, optimistic updates, pagination. When the active department changes in Zustand, all React Query hooks automatically refetch with the new department slug.
+| Context | Purpose | Persisted? |
+|---------|---------|------------|
+| `AuthContext` | User session, JWT, role, departments | `localStorage` (token + user) |
+| `SocketContext` | Socket.io connection lifecycle | Memory only |
+| `NotificationContext` | In-app notifications, unread count | Memory (fetched on load) |
+| `DepartmentContext` | Currently selected department | `localStorage` |
 
-### 8.3 Department Context Flow
-
-When a user logs in:
-1. `authStore` saves user + tokens
-2. API call to `/auth/me` returns `myDepartments[]`
-3. `departmentStore` sets the first approved department as `activeDepartment`
-4. All dashboard components read from `departmentStore.activeDepartment`
-5. The dashboard layout, sidebar, and all data queries are scoped to that department
-6. The user sees only their department's interface — colors, resources, projects, messages
-
-> [!NOTE]
-> If a user belongs to multiple departments (unlikely for interns, possible for tutors), a department switcher in the sidebar allows switching context. All queries invalidate and refetch on switch.
+### Data Fetching Pattern
+- **Custom hooks** (`useSchedules`, `useMaterials`, `useAssignments`, `useMessages`, `useAnnouncements`) encapsulate API calls
+- Hooks use `useEffect` + `useState` for initial fetch
+- Socket events update state in real-time (new items prepended/appended)
+- Paginated endpoints use cursor-based pagination for chat history
 
 ---
 
-## 9. PWA Configuration
+## 11. UI Design System
 
-### 9.1 manifest.json
+### Theme — Clean, Light, Minimal
 
-```json
-{
-  "name": "Nexus — Tech Hub Platform",
-  "short_name": "Nexus",
-  "description": "Centralized resource sharing and project management",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#6366f1",
-  "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
+```css
+:root {
+  /* Base palette — soft, warm neutrals */
+  --color-bg-primary: #FAFBFC;
+  --color-bg-secondary: #FFFFFF;
+  --color-bg-tertiary: #F3F4F6;
+  --color-bg-hover: #E5E7EB;
+  
+  /* Text */
+  --color-text-primary: #1F2937;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+  --color-text-inverse: #FFFFFF;
+  
+  /* Accent — soft indigo/blue */
+  --color-accent: #6366F1;
+  --color-accent-hover: #4F46E5;
+  --color-accent-light: #EEF2FF;
+  --color-accent-subtle: #C7D2FE;
+  
+  /* Status colors — muted, not harsh */
+  --color-success: #10B981;
+  --color-success-light: #D1FAE5;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FEF3C7;
+  --color-error: #EF4444;
+  --color-error-light: #FEE2E2;
+  --color-info: #3B82F6;
+  --color-info-light: #DBEAFE;
+  
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  
+  /* Shadows — very subtle */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 2rem;
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
 }
 ```
 
-### 9.2 Service Worker Responsibilities
+### Responsive Breakpoints
+```css
+/* Mobile first */
+/* sm: 640px  — small tablets */
+/* md: 768px  — tablets */
+/* lg: 1024px — laptops */
+/* xl: 1280px — desktops */
+```
 
-| Capability | Strategy |
-|---|---|
-| **Static Asset Caching** | Cache-first for CSS, JS, fonts, icons |
-| **API Response Caching** | Network-first with stale-while-revalidate for read endpoints |
-| **Push Event** | Listen for push, display OS notification with action URL |
-| **Notification Click** | Open or focus the PWA, navigate to the action URL |
-| **Background Sync** | Queue failed message sends, retry when online |
+### Layout Strategy
+- **Mobile (< 768px)**: Bottom navigation bar, full-width content, collapsible panels
+- **Tablet (768px–1024px)**: Collapsible sidebar, responsive grid
+- **Desktop (> 1024px)**: Fixed sidebar, multi-column dashboard widgets
 
 ---
 
-## 10. Project Progress Tracking — Detailed
+## 12. Security Architecture
 
-### 10.1 Kanban Board Model
-
-Each project has tasks organized into four columns:
-
-```
-┌──────────┐  ┌──────────────┐  ┌───────────┐  ┌──────────┐
-│   TODO   │  │ IN PROGRESS  │  │ IN REVIEW │  │   DONE   │
-│          │  │              │  │           │  │          │
-│ ┌──────┐ │  │ ┌──────────┐ │  │ ┌───────┐ │  │ ┌──────┐ │
-│ │Task 1│ │  │ │ Task 3   │ │  │ │Task 5 │ │  │ │Task 2│ │
-│ └──────┘ │  │ │ 🟡 Medium│ │  │ │Awaits │ │  │ │ ✅   │ │
-│ ┌──────┐ │  │ │ @Alice   │ │  │ │review │ │  │ └──────┘ │
-│ │Task 4│ │  │ └──────────┘ │  │ └───────┘ │  │ ┌──────┐ │
-│ └──────┘ │  │              │  │           │  │ │Task 6│ │
-│          │  │              │  │           │  │ │ ✅   │ │
-│          │  │              │  │           │  │ └──────┘ │
-└──────────┘  └──────────────┘  └───────────┘  └──────────┘
-```
-
-### 10.2 Progress Calculation
-
-```
-Project Progress = (Tasks with status DONE / Total Tasks) × 100%
-
-Per-group breakdown also available:
-  Group A: 3/5 tasks done = 60%
-  Group B: 1/4 tasks done = 25%
-  Overall: 4/9 tasks done = 44%
-```
-
-### 10.3 Task Lifecycle
-
+### Authentication Flow
 ```mermaid
-stateDiagram-v2
-    [*] --> TODO: Tutor creates task
-    TODO --> IN_PROGRESS: Intern starts working
-    IN_PROGRESS --> IN_REVIEW: Intern submits work
-    IN_REVIEW --> DONE: Tutor approves
-    IN_REVIEW --> IN_PROGRESS: Tutor requests revision
-    DONE --> [*]
+sequenceDiagram
+    participant Client
+    participant Server
+    participant DB
+    
+    Note over Client,Server: Registration
+    Client->>Server: POST /auth/register {email, password, firstName, lastName, role, departmentSlug}
+    Server->>Server: Validate with Zod
+    Server->>Server: Hash password (bcrypt, 12 rounds)
+    Server->>DB: Create User + DepartmentMember
+    Server->>Server: Sign JWT (7d expiry)
+    Server-->>Client: { token, user }
+    
+    Note over Client,Server: Login
+    Client->>Server: POST /auth/login {email, password}
+    Server->>DB: Find user by email
+    Server->>Server: Compare bcrypt hash
+    Server->>Server: Sign JWT (7d expiry)
+    Server-->>Client: { token, user, departments }
+    
+    Note over Client,Server: Authenticated Request
+    Client->>Server: GET /api/v1/... (Authorization: Bearer <token>)
+    Server->>Server: Verify JWT signature
+    Server->>Server: Extract userId, role
+    Server->>Server: Check department membership
+    Server-->>Client: Response
 ```
+
+### Middleware Chain
+```
+Request → cors → bodyParser → authMiddleware → departmentGuard → roleGuard → Controller
+```
+
+1. **`authMiddleware`**: Verifies JWT, attaches `req.user = { id, role }`
+2. **`departmentGuard`**: For `/departments/:slug/*` routes — verifies user is an approved member of that department (or is ADMIN)
+3. **`roleGuard(roles[])`**: Checks `req.user.role` is in the allowed roles list
+4. **Rate limiting**: `express-rate-limit` on auth endpoints (5 attempts/15 min) and upload endpoints (10/hour)
+
+### Additional Security Measures
+- **Input validation**: All request bodies validated with Zod schemas before touching the database
+- **SQL injection prevention**: Prisma parameterized queries (default behavior)
+- **XSS prevention**: React's built-in JSX escaping + CSP headers
+- **CORS**: Strict origin allowlist (only our Vercel frontend domain)
+- **Helmet.js**: Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+- **JWT secret rotation**: Documented process for key rotation in production
 
 ---
 
-## 11. Deployment Architecture (Hackathon)
+## 13. Error Handling Strategy
+
+### Backend
+```typescript
+// Standardized error response format
+interface ApiError {
+  error: string;        // Human-readable message
+  code?: string;        // Machine-readable error code (e.g., "AUTH_INVALID_TOKEN")
+  details?: unknown;    // Validation errors array (Zod)
+}
+```
+
+- **Global error handler** middleware catches unhandled errors, logs them, returns 500
+- **Zod validation errors** return 400 with field-level details
+- **Auth errors** return 401/403 with clear messages
+- **Not found** returns 404
+- **Rate limit** returns 429
+
+### Frontend
+- **API service layer** wraps `fetch` with automatic token attachment, error parsing, and 401 → redirect to login
+- **Toast notifications** for transient errors (network issues, validation failures)
+- **Error boundaries** for component-level React crashes
+- **Optimistic updates** for chat messages (show immediately, retry on failure)
+
+---
+
+## 14. Deployment Architecture
 
 ```mermaid
-graph TB
-    subgraph "Docker Compose"
-        NGINX["Nginx (Reverse Proxy + SSL)"]
-        CLIENT["Next.js Client (Port 3000)"]
-        SERVER["Express API + Socket.IO (Port 4000)"]
-        PG["PostgreSQL (Port 5432)"]
-        REDIS["Redis (Port 6379)"]
+graph LR
+    subgraph "Vercel (Free Tier)"
+        A["React SPA<br/>Vite Build<br/>PWA + Service Worker"]
     end
-
-    NGINX -->|"/"| CLIENT
-    NGINX -->|"/api, /socket.io"| SERVER
-    SERVER --> PG
-    SERVER --> REDIS
+    
+    subgraph "Render (Free Tier)"
+        B["Express.js API<br/>Socket.io<br/>node-cron jobs"]
+    end
+    
+    subgraph "Supabase (Free Tier)"
+        C["PostgreSQL DB<br/>500MB"]
+        D["Storage Bucket<br/>1GB files"]
+    end
+    
+    A -->|"HTTPS API calls"| B
+    A -->|"WebSocket"| B
+    B -->|"Prisma Client"| C
+    B -->|"@supabase/storage-js"| D
+    B -->|"web-push"| E["Push Service<br/>(FCM/Mozilla)"]
 ```
 
-**docker-compose.yml services:**
-- `nginx` — reverse proxy, SSL termination, static file serving
-- `client` — Next.js production build
-- `server` — Express API + Socket.IO
-- `postgres` — PostgreSQL 16
-- `redis` — Redis 7
+### Environment Variables
 
-> [!TIP]
-> For the hackathon, deploy on a single VPS (e.g., DigitalOcean Droplet, Railway, or Render). The docker-compose setup makes it one-command deployable.
+**Server (Render)**:
+```env
+NODE_ENV=production
+PORT=4000
+DATABASE_URL=postgresql://...@db.xxx.supabase.co:5432/postgres
+JWT_SECRET=<generated-secure-key>
+JWT_REFRESH_SECRET=<generated-secure-key>
+CLIENT_URL=https://knowvia.vercel.app
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_KEY=<supabase-service-role-key>
+SUPABASE_STORAGE_BUCKET=knowvia-files
+VAPID_PUBLIC_KEY=<generated>
+VAPID_PRIVATE_KEY=<generated>
+VAPID_SUBJECT=mailto:admin@knowvia.app
+MAX_FILE_SIZE_MB=25
+UPLOAD_RATE_LIMIT=10
+```
+
+**Client (Vercel)**:
+```env
+VITE_API_URL=https://knowvia-api.onrender.com
+VITE_WS_URL=https://knowvia-api.onrender.com
+VITE_VAPID_PUBLIC_KEY=<same-as-server>
+```
+
+### Build & Deploy Pipeline
+1. **Git push** to `main` branch
+2. **Vercel** auto-builds client: `cd client && npm run build`
+3. **Render** auto-builds server: `cd server && npm run build && npm start`
+4. **Prisma migrations** run as part of Render's build command: `npx prisma migrate deploy`
 
 ---
 
-## User Review Required
+## 15. Project File Structure (New)
 
-> [!IMPORTANT]
-> **Tech Stack Confirmation**: The plan uses **Next.js + Express + PostgreSQL + Redis**. This is a full-stack JavaScript/TypeScript setup. If your team has a preference for a different backend language (Python/Django, Go, etc.), let me know before I begin coding.
+```
+knowvia/
+├── client/
+│   ├── public/
+│   │   ├── manifest.json            # PWA manifest
+│   │   ├── sw.js                    # Service worker (generated by vite-plugin-pwa)
+│   │   └── icons/                   # PWA icons (192x192, 512x512)
+│   ├── src/
+│   │   ├── main.tsx                 # Entry point
+│   │   ├── App.tsx                  # Root component, router setup
+│   │   ├── index.css                # Global styles, CSS custom properties
+│   │   │
+│   │   ├── contexts/
+│   │   │   ├── AuthContext.tsx
+│   │   │   ├── SocketContext.tsx
+│   │   │   ├── NotificationContext.tsx
+│   │   │   └── DepartmentContext.tsx
+│   │   │
+│   │   ├── hooks/
+│   │   │   ├── useSchedules.ts
+│   │   │   ├── useMaterials.ts
+│   │   │   ├── useAssignments.ts
+│   │   │   ├── useMessages.ts
+│   │   │   ├── useAnnouncements.ts
+│   │   │   └── useNotifications.ts
+│   │   │
+│   │   ├── services/
+│   │   │   ├── api.ts               # Base fetch wrapper with auth
+│   │   │   └── push.ts              # Push subscription helpers
+│   │   │
+│   │   ├── pages/
+│   │   │   ├── LoginPage.tsx
+│   │   │   ├── RegisterPage.tsx
+│   │   │   ├── DashboardPage.tsx
+│   │   │   ├── SchedulePage.tsx
+│   │   │   ├── MaterialsPage.tsx
+│   │   │   ├── ChatPage.tsx
+│   │   │   ├── AssignmentsPage.tsx
+│   │   │   ├── AssignmentDetailPage.tsx
+│   │   │   └── AnnouncementsPage.tsx
+│   │   │
+│   │   ├── components/
+│   │   │   ├── layout/
+│   │   │   │   ├── AppLayout.tsx
+│   │   │   │   ├── Sidebar.tsx
+│   │   │   │   ├── TopBar.tsx
+│   │   │   │   ├── BottomNav.tsx     # Mobile navigation
+│   │   │   │   └── ProtectedRoute.tsx
+│   │   │   │
+│   │   │   ├── dashboard/
+│   │   │   │   ├── UpcomingClassesWidget.tsx
+│   │   │   │   ├── AssignmentProgressTracker.tsx
+│   │   │   │   ├── RecentAnnouncementsWidget.tsx
+│   │   │   │   ├── ScheduleWidget.tsx
+│   │   │   │   └── QuickStatsWidget.tsx
+│   │   │   │
+│   │   │   ├── schedule/
+│   │   │   │   ├── ScheduleCard.tsx
+│   │   │   │   └── CreateScheduleForm.tsx
+│   │   │   │
+│   │   │   ├── materials/
+│   │   │   │   ├── MaterialCard.tsx
+│   │   │   │   └── UploadMaterialForm.tsx
+│   │   │   │
+│   │   │   ├── chat/
+│   │   │   │   ├── MessageList.tsx
+│   │   │   │   ├── MessageBubble.tsx
+│   │   │   │   ├── ReplyPreview.tsx
+│   │   │   │   └── MessageInput.tsx
+│   │   │   │
+│   │   │   ├── assignments/
+│   │   │   │   ├── AssignmentCard.tsx
+│   │   │   │   ├── CreateAssignmentForm.tsx
+│   │   │   │   ├── SubmissionForm.tsx
+│   │   │   │   └── SubmissionReviewCard.tsx
+│   │   │   │
+│   │   │   ├── notifications/
+│   │   │   │   ├── NotificationBell.tsx
+│   │   │   │   ├── NotificationPanel.tsx
+│   │   │   │   └── NotificationItem.tsx
+│   │   │   │
+│   │   │   └── ui/
+│   │   │       ├── Button.tsx
+│   │   │       ├── Input.tsx
+│   │   │       ├── Modal.tsx
+│   │   │       ├── Toast.tsx
+│   │   │       ├── FileUpload.tsx
+│   │   │       ├── ProgressBar.tsx
+│   │   │       ├── Badge.tsx
+│   │   │       ├── Card.tsx
+│   │   │       ├── EmptyState.tsx
+│   │   │       └── LoadingSpinner.tsx
+│   │   │
+│   │   └── types/
+│   │       └── index.ts             # All TypeScript interfaces
+│   │
+│   ├── index.html
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── server/
+│   ├── prisma/
+│   │   ├── schema.prisma
+│   │   ├── migrations/              # Prisma migration files
+│   │   └── seed.ts                  # Seed data (departments, admin user)
+│   ├── src/
+│   │   ├── index.ts                 # Express server entry
+│   │   ├── config/
+│   │   │   ├── prisma.ts            # Prisma client singleton
+│   │   │   └── supabase.ts          # Supabase storage client
+│   │   │
+│   │   ├── middleware/
+│   │   │   ├── auth.ts              # JWT verification
+│   │   │   ├── departmentGuard.ts   # Department membership check
+│   │   │   ├── roleGuard.ts         # Role-based access
+│   │   │   ├── rateLimiter.ts       # Rate limiting
+│   │   │   ├── upload.ts            # Multer config (memory storage)
+│   │   │   └── fileValidator.ts     # Magic byte + extension validation
+│   │   │
+│   │   ├── controllers/
+│   │   │   ├── auth.controller.ts
+│   │   │   ├── schedule.controller.ts
+│   │   │   ├── material.controller.ts
+│   │   │   ├── announcement.controller.ts
+│   │   │   ├── assignment.controller.ts
+│   │   │   ├── message.controller.ts
+│   │   │   └── notification.controller.ts
+│   │   │
+│   │   ├── routes/
+│   │   │   ├── auth.routes.ts
+│   │   │   ├── department.routes.ts
+│   │   │   └── notification.routes.ts
+│   │   │
+│   │   ├── services/
+│   │   │   ├── announcement.service.ts   # Auto-generation logic
+│   │   │   ├── notification.service.ts   # Create + push notifications
+│   │   │   └── reminder.service.ts       # Cron job for class reminders
+│   │   │
+│   │   ├── socket/
+│   │   │   └── index.ts             # Socket.io setup + event handlers
+│   │   │
+│   │   └── utils/
+│   │       ├── fileSignatures.ts    # Magic byte definitions
+│   │       └── validation.ts        # Zod schemas
+│   │
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── .gitignore
+├── package.json                     # Monorepo root scripts
+└── README.md
+```
 
-> [!IMPORTANT]
-> **Scope for Hackathon**: This is a comprehensive architecture. For the hackathon, I recommend implementing in phases:
-> - **Phase 1 (MVP)**: Auth, Departments, Resources, Announcements, Dashboard
-> - **Phase 2**: Projects, Tasks, Kanban Board, Submissions
-> - **Phase 3**: Real-time Messaging, Push Notifications, Class Scheduling
->
-> Should I prioritize differently?
+---
+
+## 16. Data Flow: End-to-End Examples
+
+### Example 1: Tutor Creates an Assignment
+
+```mermaid
+sequenceDiagram
+    participant Tutor as Tutor (Client)
+    participant API as Express API
+    participant DB as PostgreSQL
+    participant AnnounceSvc as Announcement Service
+    participant NotifSvc as Notification Service
+    participant Socket as Socket.io
+    participant Push as Web Push
+    participant Student as Student (Client)
+
+    Tutor->>API: POST /departments/web-dev/assignments
+    API->>API: Auth + DeptGuard + RoleGuard(TUTOR, ADMIN)
+    API->>DB: Create Assignment
+    DB-->>API: Assignment record
+
+    API->>AnnounceSvc: createAutoAnnouncement(ASSIGNMENT, assignment)
+    AnnounceSvc->>DB: Create Announcement (sourceType=ASSIGNMENT, sourceId=assignmentId)
+    
+    API->>NotifSvc: notifyDepartmentMembers(deptId, notification)
+    NotifSvc->>DB: Bulk create Notification records for all dept members
+    NotifSvc->>Push: Send push to all members' subscriptions
+    
+    API->>Socket: Emit "assignment:new" to dept room
+    API->>Socket: Emit "announcement:new" to dept room
+    Socket->>Student: "assignment:new" event
+    Socket->>Student: "announcement:new" event
+    Push->>Student: Push notification on device
+
+    API-->>Tutor: 201 { assignment }
+```
+
+### Example 2: Student Checks Bell → Clicks Announcement → Submits Assignment
+
+```mermaid
+sequenceDiagram
+    participant Student as Student (Client)
+    participant API as Express API
+    participant DB as PostgreSQL
+    participant Storage as Supabase Storage
+
+    Student->>Student: Clicks bell icon → NotificationPanel opens
+    Student->>API: GET /notifications
+    API->>DB: Fetch notifications WHERE recipientId = student.id
+    DB-->>API: Notification[] (includes ASSIGNMENT type)
+    API-->>Student: Notifications list
+
+    Student->>Student: Clicks "📝 New Assignment: Build REST API"
+    Student->>Student: App navigates to /assignments/{assignmentId}
+    
+    Student->>API: GET /departments/web-dev/assignments/{id}
+    API-->>Student: Assignment details
+
+    Student->>Student: Fills submission form, attaches file
+    Student->>API: POST /departments/web-dev/assignments/{id}/submit (multipart)
+    API->>API: Validate file (magic bytes, size, extension)
+    API->>Storage: Upload file to Supabase Storage
+    Storage-->>API: File URL
+    API->>DB: Create Submission record
+    API-->>Student: 201 { submission }
+```
+
+---
+
+## 17. Assignment Progress Tracker (Student Dashboard)
+
+The student dashboard prominently displays an **Assignment Progress Tracker** widget:
+
+### Data Aggregation
+```sql
+-- For a given student + department, calculate:
+Total assignments in department:        COUNT(assignments)
+Submitted assignments:                  COUNT(submissions WHERE submittedById = studentId)
+Approved assignments:                   COUNT(submissions WHERE status = 'APPROVED')
+Pending review:                         COUNT(submissions WHERE status IN ('SUBMITTED', 'IN_REVIEW'))
+Needs revision:                         COUNT(submissions WHERE status = 'NEEDS_REVISION')
+Not yet submitted:                      Total - Submitted
+```
+
+### Widget Components
+1. **Progress Ring/Bar**: Visual percentage of `approved / total` assignments
+2. **Summary Stats**: Cards showing submitted, approved, pending, needs-revision counts
+3. **Primary Assignment**: The assignment the student is currently working on (most recently submitted or next due)
+4. **Recent Status Updates**: List of latest submission review verdicts (e.g., "✅ Build REST API — Approved", "🔄 CSS Layout — Needs Revision")
+
+---
+
+## 18. Dependencies (New vs Existing)
+
+### Server — New Dependencies
+| Package | Purpose | Size Impact |
+|---------|---------|-------------|
+| `@supabase/supabase-js` | Storage client for file uploads | ~50KB |
+| `node-cron` | Class reminder scheduler | ~10KB |
+| `express-rate-limit` | Rate limiting on auth + uploads | ~15KB |
+| `helmet` | Security headers | ~20KB |
+| `file-type` | Magic byte detection for upload validation | ~30KB |
+
+### Server — Removed Dependencies
+| Package | Reason |
+|---------|--------|
+| (none removed, all existing deps still needed) | — |
+
+### Client — New Dependencies
+| Package | Purpose | Size Impact |
+|---------|---------|-------------|
+| `react-router-dom` | Client-side routing | ~30KB |
+| `vite-plugin-pwa` | PWA generation (dev dependency) | Build-time only |
+
+### Client — Removed Dependencies
+| Package | Reason |
+|---------|--------|
+| `canvas-confetti` | Unnecessary decorative effect |
+| `@types/canvas-confetti` | — |
+
+---
 
 ## Open Questions
 
-> [!WARNING]
-> 1. **Hosting/Deployment**: Do you have a hosting provider in mind, or should I optimize for free-tier options (Render, Railway, Supabase)?
-> 2. **File Storage**: Are you okay with Supabase Storage (free tier: 1GB), or do you have AWS/GCP credits?
-> 3. **Team Size**: How many developers are on your hackathon team? This affects how I structure the codebase for parallel work.
-> 4. **Hackathon Timeline**: How long is the hackathon? This determines how much we can realistically build.
-> 5. **Existing Accounts**: Do you already have accounts set up for any services (Supabase, Vercel, MongoDB Atlas, etc.)?
+> [!IMPORTANT]
+> **1. Department assignment during registration**: Should students/tutors select their department during registration (current behavior), or should an admin assign them after? The current flow auto-approves on registration, which is convenient but less controlled.
+
+> [!IMPORTANT]  
+> **2. Multiple department membership**: Can a tutor belong to multiple departments? The current schema supports it. Should we keep this flexibility, or enforce one department per tutor?
+
+> [!IMPORTANT]
+> **3. File storage budget**: With 1GB free Supabase storage and a 25MB per-file limit, that's roughly 40 files before hitting the cap. Should we:
+> - (a) Keep 25MB limit and accept the constraint for MVP
+> - (b) Lower to 10MB per file (~100 files capacity)
+> - (c) Use a different free storage provider with more capacity (e.g., Cloudflare R2 has 10GB free)
+
+> [!NOTE]
+> **4. Chat attachments**: The old Nexus chat supported file attachments in messages. Since Knowvia has a dedicated Materials section, should chat remain **text-only** to keep it simple and conserve storage?
+
+> [!NOTE]
+> **5. Admin user creation**: Should the first admin be created via a seed script (as currently), or should there be a one-time setup flow?
+
+---
 
 ## Verification Plan
 
 ### Automated Tests
-- Unit tests for middleware (auth, department guard, role guard)
-- Integration tests for critical API flows (register → login → join department → access resources)
-- Database seed script to populate test departments and users
+- `npm run build` on both client and server to verify TypeScript compilation
+- Prisma schema validation: `npx prisma validate`
+- Prisma migration dry-run: `npx prisma migrate dev --create-only`
 
 ### Manual Verification
-- Register as intern, login, verify department isolation
-- Upload a resource as tutor, verify intern can download
-- Create project with tasks, verify kanban board updates
-- Send a message, verify real-time delivery via WebSocket
-- Trigger an announcement, verify push notification on a separate device
+- **Auth flow**: Register → Login → JWT stored → Protected routes accessible
+- **Department isolation**: Login as Intern in dept A → cannot see dept B data
+- **File upload**: Upload a file → verify it appears in Supabase Storage → download works
+- **File security**: Upload a renamed `.exe` → verify it's rejected by magic byte validation
+- **Announcements**: Create assignment as tutor → verify auto-announcement appears for students
+- **Push notification**: Subscribe → create class schedule → verify push arrives on device
+- **Class reminder**: Schedule class for tomorrow → verify reminder cron fires and pushes notification
+- **Responsive**: Test on 375px (mobile), 768px (tablet), 1280px (desktop) viewports
+- **PWA**: Install on mobile → verify offline shell loads → verify push notifications work

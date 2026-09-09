@@ -1,100 +1,109 @@
-# Nexus Platform — Walkthrough & Implementation Guide
+# Knowvia Platform Rebuild — Walkthrough
 
-The **Nexus** Progressive Web App (PWA) is built and operational, solving the tech hub's resource fragmentation, project tracking, and communication challenges.
-
----
-
-## 1. Accomplished Architecture & Implementation
-
-### 1.1 Backend & Database (`server/`)
-- **Runtime**: Node.js v24.19.0 LTS + TypeScript
-- **Database**: SQLite via Prisma ORM (`dev.db`) with zero external dependency friction, fully structured for seamless migration to PostgreSQL / Supabase when ready.
-- **RESTful API**: 35+ secure endpoints with CORS, rate-limiting, and parameter validation.
-- **Security & Department Isolation**:
-  - [auth.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/middleware/auth.ts): Stateless JWT verification.
-  - [departmentGuard.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/middleware/departmentGuard.ts): Strict isolation middleware preventing interns of one department (e.g. Cybersecurity) from accessing another department's data (e.g. Data Analysis).
-  - [roleGuard.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/middleware/roleGuard.ts): Role-based permissions (`ADMIN`, `TUTOR`, `INTERN`).
-- **Real-Time WebSockets**:
-  - [socket/index.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/socket/index.ts): Socket.IO server with JWT authentication and auto-joining of department rooms (`dept:{slug}`).
-  - Live typing indicators and instant messaging.
-- **Push & In-App Notifications**:
-  - [push.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/utils/push.ts): Web Push (VAPID) service worker dispatch + database notification history.
-- **File Upload Service**:
-  - [upload.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/middleware/upload.ts): Multer storage supporting any file format (PDFs, shell scripts, PCAPs, 3D meshes, code archives) with sanitization and direct streaming.
-
-### 1.2 Frontend Progressive Web App (`client/`)
-- **Framework**: Vite + React 18 + TypeScript + Lucide Icons + Canvas Confetti
-- **Styling**: Pure Vanilla CSS design tokens with futuristic dark glassmorphism, dynamic department HSL themes, and mobile responsive layout.
-- **PWA Capabilities**:
-  - [manifest.json](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/client/public/manifest.json): Standalone display mode with custom icons.
-  - [sw.js](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/client/public/sw.js): Service worker handling native OS push events, caching, and notification clicks.
-- **Core Views**:
-  - **Dashboard**: Department hero banner, quick action buttons, live stats, active project progress circle, upcoming class countdown, latest announcements.
-  - **Learning Resources**: Searchable file catalog, category filter pills (`LECTURE`, `TUTORIAL`, `EXERCISE`, `REFERENCE`, `TOOL`), download triggers, tutor file upload modal.
-  - **Projects & Kanban Board**: 4 columns (`TODO`, `IN_PROGRESS`, `IN_REVIEW`, `DONE`), working group assignments, task cards with priority badges, intern deliverable submission modal, tutor review & feedback modal with celebratory confetti.
-  - **Class Scheduler**: Calendar/agenda layout, location badges, virtual meeting links, tutor session scheduler modal.
-  - **Announcements**: Pinned broadcasts, urgent priority alerts, tutor broadcast modal.
-  - **Department Chat**: Live real-time chat room, typing status indicators, message bubbles styled by sender role.
-  - **Members Directory**: Roster separating instructors and registered interns.
-  - **Demo Persona Switcher**: Top navbar dropdown for 1-click persona switching during hackathon evaluation.
+Knowvia has been rebuilt from the ground up as a streamlined, responsive Progressive Web Application (PWA) knowledge repository.
 
 ---
 
-## 2. Verification & Security Testing
+## What Was Accomplished
 
-### 2.1 API Health & Session
-```powershell
-Invoke-RestMethod -Uri "http://localhost:4000/health"
-# Returns: { status: "ok", service: "Nexus API & Real-time Server" }
-```
-
-### 2.2 Department Isolation Test (403 Forbidden)
-Tested accessing Data Analysis resources as David Kim (Cybersecurity Intern):
-```powershell
-Invoke-RestMethod -Uri "http://localhost:4000/api/v1/departments/data-analysis/resources" -Headers @{ Authorization = "Bearer <david_token>" }
-# Returns: 403 Forbidden {"error":"Access Denied: You are not an approved member of this department"}
-```
-
-### 2.3 Approved Department Access (200 OK)
-Tested accessing Cybersecurity resources as David Kim:
-```powershell
-Invoke-RestMethod -Uri "http://localhost:4000/api/v1/departments/cybersecurity/resources" -Headers @{ Authorization = "Bearer <david_token>" }
-# Returns: 200 OK with OWASP Guide, Network Recon Script, and Wireshark PCAP
-```
-
-### 2.4 Production Client Build
-```powershell
-npm run build (in client/)
-# Output: ✓ built in 1.45s with 0 errors
-```
+### 1. Platform Rebranding & Architecture Streamlining
+- Rebranded from **Nexus** to **Knowvia** across all packages, metadata, HTML, PWA manifest, and UI components.
+- Stripped unnecessary features (complex project management groups, separate tasks boards, members directory) down to the core 4 features + assignment management:
+  1. **Class Scheduling** (primary tutor feature for extra classes beyond static timetable; class timetable for students).
+  2. **Learning Materials & File Sharing** (curated file repository for students; file sharing for tutors/admin with 25MB limits and magic-byte security inspection).
+  3. **Assignment Management** (replaces project management; submission tracking, milestone progress meter, and tutor reviews).
+  4. **Chatbox** (text-only discussion channel, sender names, reply threading, no emojis/attachments).
+  5. **Announcements** (bell icon for students with click-through deep links; dedicated management tab for tutors/admin; global broadcast for admin; 1-day automated class reminders).
 
 ---
 
-## 3. Pre-Seeded Demo Accounts
+### 2. Design System: Clean Lighter Theme
+- Implemented in [design-tokens.css](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/client/src/styles/design-tokens.css) and [app.css](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/client/src/styles/app.css):
+  - **Soft minimal palette**: Crisp white surfaces (`#ffffff`), soft slate page background (`#f8fafc`), subtle borders (`#e2e8f0`).
+  - **Accents**: Soft indigo (`#4f46e5`), emerald green (`#10b981`), amber (`#f59e0b`), and sky blue (`#0ea5e9`).
+  - **Generous spacing and typography**: Crisp `Inter` and `Outfit` font scales.
+  - **Subtle shadows**: Clean elevation without heavy dark glows.
+  - **Fluid responsive layout**: Adapts seamlessly to mobile (<600px), tablet (<860px), and desktop.
 
-All demo accounts use password: `password123`
+---
 
-| Role | Name | Email | Department |
+### 3. Role-Tailored Dashboards & Feature Highlights
+- **For Tutors & Admin**:
+  - **Class Scheduler** featured as the primary component with "Schedule Extra Class" quick button to provide flexibility over static timetables.
+  - **Learning Materials & File Sharing** highlighted with upload button and 25MB storage efficiency note.
+  - **Sidebar** includes the **Announcements** tab for creating and managing broadcasts.
+- **For Interns & Students**:
+  - **Upcoming Class Timetable** featured as the primary component, displaying locations, virtual meeting links, and "1-Day Reminder Active" indicator.
+  - **Assignment Progress Tracker & Milestone Meter**:
+    - Progress bar showing milestone completion percentage.
+    - Summary counters: Approved, Needs Revision, Under Review, Total Given.
+    - **Current Focus Assignment Card**: Highlights the primary assignment the student is working on.
+    - **Recent Feedback Feed**: Displays qualitative feedback and verdicts from tutors.
+  - **Announcements**: Accessed via the **Bell Icon** on the top navigation bar (not a separate tab).
+
+---
+
+### 4. File Security & Storage Safety
+- Implemented in [fileValidator.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/utils/fileValidator.ts) and [upload.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/middleware/upload.ts):
+  - **25MB File Upload Limit**: Enforces storage efficiency for free-tier deployments.
+  - **Executable Blocklist**: Rejects dangerous extensions (`.exe`, `.bat`, `.cmd`, `.sh`, `.ps1`, `.vbs`, `.dll`, `.scr`, `.msi`, `.jar`, etc.).
+  - **Magic-Byte Signature Inspection**: Inspects binary headers to detect disguised executables (e.g. Windows PE `MZ` header, Linux ELF, Mach-O binaries renamed to `.pdf` or `.txt`).
+  - **Filename Sanitization**: Cleans path traversal (`../`), null bytes, and unsafe characters.
+  - **Safe Serving**: Downloads forced as attachments (`Content-Disposition: attachment`).
+
+---
+
+### 5. Auto-Announcements, Deep-Links & Push Notifications
+- Implemented in [announcement.service.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/services/announcement.service.ts) and [notification.service.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/services/notification.service.ts):
+  - When a tutor/admin creates an assignment, schedules a class, or uploads a material, an announcement is **auto-generated**.
+  - Announcements store `sourceType` (`ASSIGNMENT`, `CLASS_SCHEDULE`, `MATERIAL`) and `sourceId` for deep linking.
+  - Clicking an announcement navigates directly to that assignment, schedule, or material.
+  - Web Push notifications dispatched via `web-push` to subscribed devices.
+
+---
+
+### 6. Automated 1-Day Class Reminder Scheduler
+- Implemented in [reminder.service.ts](file:///c:/Users/HP/Documents/Project%20Nexus/Nexus/server/src/services/reminder.service.ts):
+  - Cron scheduler checks every 30 minutes for classes scheduled within the next 24 hours where `reminderSent = false`.
+  - Dispatches automated reminders with class time, room, and meeting link.
+  - Marks `reminderSent = true` to prevent duplicates.
+
+---
+
+### 7. Department Isolation & Registration
+- Enforced single department membership per student and tutor (admin has global access).
+- Registration form requires selecting a department from the live list.
+- Route guards strictly prevent users from accessing another department's materials, schedules, assignments, or chat (returns 403 Forbidden).
+
+---
+
+## Validation & Verification Results
+
+| Test Scenario | Verification Method | Result |
+|---|---|---|
+| **Server TypeScript Build** | `npm --prefix server run build` (`tsc`) | ✅ Exit code 0, clean compilation |
+| **Client Vite Build** | `npm --prefix client run build` (`tsc -b && vite build`) | ✅ Exit code 0, 1.58s build time |
+| **Prisma DB Sync & Seed** | `npx prisma db push --force-reset` + seed | ✅ Seeded all departments, demo accounts, schedules, materials, and assignments |
+| **Server Dev Startup & Health** | `GET /health` | ✅ `{"status":"ok","service":"Knowvia Knowledge Repo & Real-time Platform"}` |
+| **Automated Class Reminder** | Server startup log | ✅ Dispatched 1-day reminder for tomorrow's class in Cybersecurity |
+| **Student Login & Department** | `POST /auth/login` | ✅ Returns JWT + user enrolled in single department |
+| **Assignment Progress Stats** | `GET /departments/cybersecurity/assignments` | ✅ Returned 67% completion, focus assignment, and tutor review comments |
+| **File Security: Blocked Extension** | Upload `.exe` file via curl | ✅ Rejected: `{"error":"Security Alert: Executable or script files (.exe) are strictly blocked..."}` |
+| **File Security: Disguised Binary** | Upload PE binary renamed to `.pdf` | ✅ Rejected: `{"error":"Security Alert: File signature matches a Windows executable (MZ header)..."}` |
+| **Valid Material Upload** | Upload `.txt` file via curl | ✅ Uploaded cleanly: size verified, announcement & notification triggered |
+| **Department Isolation** | David (Cyber) accessing Web Dev | ✅ Rejected: `403 {"error":"Access Denied: You are not an approved member of this department"}` |
+| **Real-time Deduplication & Cleanup** | Socket listener lifecycle + ID guard | ✅ Fixed listener accumulation on role switch; enforced ID deduplication for materials, messages, schedules, assignments |
+| **Personalized Announcement Clear/Delete** | `DismissedAnnouncement` model + personal socket rooms | ✅ Deleting or clearing announcements only dismisses them for the current user without affecting peers |
+| **Git Commit** | `git commit` | ✅ Committed locally, ready to push on user approval |
+
+---
+
+## Demo Credentials for Evaluation
+
+| Role | Email | Password | Scope |
 |---|---|---|---|
-| **Admin** | Sarah Director | `admin@nexus.hub` | Cross-Hub Global Access |
-| **Tutor** | Alex Vance | `cyber.tutor@nexus.hub` | Cybersecurity |
-| **Intern** | David Kim | `david.cyber@nexus.hub` | Cybersecurity (Group Alpha) |
-| **Intern** | Maya Patel | `maya.cyber@nexus.hub` | Cybersecurity (Group Bravo) |
-| **Tutor** | Dr. Evelyn Reed | `data.tutor@nexus.hub` | Data Analysis |
-| **Intern** | Sam Taylor | `sam.data@nexus.hub` | Data Analysis |
-| **Tutor** | Marcus Chen | `web.tutor@nexus.hub` | Web Development |
-
----
-
-## 4. How to Run
-
-From the root project directory `c:\Users\HP\Documents\Project Nexus\Nexus`:
-
-```powershell
-# Run both Backend Server (port 4000) and Frontend PWA (port 3000) simultaneously:
-npm run dev
-
-# Or run individually:
-npm run dev:server   # Starts Express + Socket.IO API on http://localhost:4000
-npm run dev:client   # Starts Vite PWA on http://localhost:3000
-```
+| **Admin** | `admin@knowvia.internal` | `password123` | Global access across all departments |
+| **Cyber Tutor** | `cyber.tutor@knowvia.internal` | `password123` | Schedule classes, share materials, review assignments |
+| **Cyber Intern (David)** | `david.cyber@knowvia.internal` | `password123` | Timetable, download materials, progress tracker, submit work |
+| **Cyber Intern (Maya)** | `maya.cyber@knowvia.internal` | `password123` | Assigned work needing revision |
+| **Web Dev Tutor** | `web.tutor@knowvia.internal` | `password123` | Web Development department |
