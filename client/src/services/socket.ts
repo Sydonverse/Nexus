@@ -14,6 +14,7 @@ const SOCKET_URL =
 
 class SocketService {
   private socket: Socket | null = null;
+  private currentToken: string | null = null;
   private messageListeners: ((msg: ChatMessage) => void)[] = [];
   private notificationListeners: ((notif: AppNotification) => void)[] = [];
   private typingListeners: ((data: { userId: string; name: string; departmentSlug: string }) => void)[] = [];
@@ -28,8 +29,34 @@ class SocketService {
   private materialListeners: ((mat: Material) => void)[] = [];
   private materialDeletedListeners: ((data: { id: string }) => void)[] = [];
 
+  public removeAllListeners() {
+    this.messageListeners = [];
+    this.notificationListeners = [];
+    this.typingListeners = [];
+    this.stopTypingListeners = [];
+    this.announcementListeners = [];
+    this.announcementDeletedListeners = [];
+    this.scheduleListeners = [];
+    this.scheduleUpdatedListeners = [];
+    this.scheduleDeletedListeners = [];
+    this.assignmentListeners = [];
+    this.assignmentDeletedListeners = [];
+    this.materialListeners = [];
+    this.materialDeletedListeners = [];
+  }
+
   public connect(token: string) {
-    if (this.socket?.connected) return this.socket;
+    if (this.socket?.connected && this.currentToken === token) {
+      return this.socket;
+    }
+
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
+    this.currentToken = token;
+    this.removeAllListeners();
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
@@ -107,6 +134,8 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
     }
+    this.currentToken = null;
+    this.removeAllListeners();
   }
 
   public sendMessage(departmentSlug: string, content: string, replyToId?: string | null) {

@@ -189,14 +189,14 @@ export const App: React.FC = () => {
     // Connect WebSocket
     const token =
       localStorage.getItem('knowvia_auth_token') || localStorage.getItem('nexus_auth_token');
-    const socket = socketService.connect(token || '');
+    socketService.connect(token || '');
 
-    // Socket Event Subscriptions
-    socketService.onNewMessage((msg) => {
-      setMessages((prev) => [...prev, msg]);
+    // Socket Event Subscriptions with id-based deduplication
+    const unsubMessage = socketService.onNewMessage((msg) => {
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
     });
 
-    socketService.onUserTyping((data) => {
+    const unsubTyping = socketService.onUserTyping((data) => {
       if (data.departmentSlug === activeDept.slug && data.userId !== user.id) {
         setTypingUsers((prev) => {
           if (prev.some((u) => u.userId === data.userId)) return prev;
@@ -205,57 +205,69 @@ export const App: React.FC = () => {
       }
     });
 
-    socketService.onUserStopTyping((data) => {
+    const unsubStopTyping = socketService.onUserStopTyping((data) => {
       setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
     });
 
-    socketService.onNewAnnouncement((ann) => {
-      setAnnouncements((prev) => [ann, ...prev]);
+    const unsubAnnNew = socketService.onNewAnnouncement((ann) => {
+      setAnnouncements((prev) => (prev.some((a) => a.id === ann.id) ? prev : [ann, ...prev]));
       fetchNotifications();
     });
 
-    socketService.onAnnouncementDeleted((data) => {
+    const unsubAnnDel = socketService.onAnnouncementDeleted((data) => {
       setAnnouncements((prev) => prev.filter((a) => a.id !== data.id));
     });
 
-    socketService.onNewSchedule((sched) => {
-      setSchedules((prev) => [...prev, sched]);
+    const unsubSchedNew = socketService.onNewSchedule((sched) => {
+      setSchedules((prev) => (prev.some((s) => s.id === sched.id) ? prev : [...prev, sched]));
       fetchNotifications();
     });
 
-    socketService.onScheduleUpdated((sched) => {
+    const unsubSchedUpd = socketService.onScheduleUpdated((sched) => {
       setSchedules((prev) => prev.map((s) => (s.id === sched.id ? sched : s)));
     });
 
-    socketService.onScheduleDeleted((data) => {
+    const unsubSchedDel = socketService.onScheduleDeleted((data) => {
       setSchedules((prev) => prev.filter((s) => s.id !== data.id));
     });
 
-    socketService.onNewAssignment((assign) => {
-      setAssignments((prev) => [assign, ...prev]);
+    const unsubAssignNew = socketService.onNewAssignment((assign) => {
+      setAssignments((prev) => (prev.some((a) => a.id === assign.id) ? prev : [assign, ...prev]));
       fetchNotifications();
     });
 
-    socketService.onAssignmentDeleted((data) => {
+    const unsubAssignDel = socketService.onAssignmentDeleted((data) => {
       setAssignments((prev) => prev.filter((a) => a.id !== data.id));
     });
 
-    socketService.onNewMaterial((mat) => {
-      setMaterials((prev) => [mat, ...prev]);
+    const unsubMatNew = socketService.onNewMaterial((mat) => {
+      setMaterials((prev) => (prev.some((m) => m.id === mat.id) ? prev : [mat, ...prev]));
       fetchNotifications();
     });
 
-    socketService.onMaterialDeleted((data) => {
+    const unsubMatDel = socketService.onMaterialDeleted((data) => {
       setMaterials((prev) => prev.filter((m) => m.id !== data.id));
     });
 
-    socketService.onNewNotification((notif) => {
-      setNotifications((prev) => [notif, ...prev]);
+    const unsubNotifNew = socketService.onNewNotification((notif) => {
+      setNotifications((prev) => (prev.some((n) => n.id === notif.id) ? prev : [notif, ...prev]));
       setUnreadCount((c) => c + 1);
     });
 
     return () => {
-      socketService.disconnect();
+      unsubMessage();
+      unsubTyping();
+      unsubStopTyping();
+      unsubAnnNew();
+      unsubAnnDel();
+      unsubSchedNew();
+      unsubSchedUpd();
+      unsubSchedDel();
+      unsubAssignNew();
+      unsubAssignDel();
+      unsubMatNew();
+      unsubMatDel();
+      unsubNotifNew();
     };
   }, [user, activeDept, loadDepartmentData, fetchNotifications]);
 
@@ -288,7 +300,9 @@ export const App: React.FC = () => {
     if (!activeDept) return;
     const res = await api.materials.upload(activeDept.slug, formData);
     if (res.material) {
-      setMaterials((prev) => [res.material, ...prev]);
+      setMaterials((prev) =>
+        prev.some((m) => m.id === res.material.id) ? prev : [res.material, ...prev]
+      );
     }
     // Refresh announcements
     api.announcements.list(activeDept.slug).then((r) => setAnnouncements(r.announcements || []));
@@ -304,7 +318,9 @@ export const App: React.FC = () => {
     if (!activeDept) return;
     const res = await api.schedules.create(activeDept.slug, data);
     if (res.schedule) {
-      setSchedules((prev) => [...prev, res.schedule]);
+      setSchedules((prev) =>
+        prev.some((s) => s.id === res.schedule.id) ? prev : [...prev, res.schedule]
+      );
     }
     api.announcements.list(activeDept.slug).then((r) => setAnnouncements(r.announcements || []));
   };
@@ -319,7 +335,9 @@ export const App: React.FC = () => {
     if (!activeDept) return;
     const res = await api.assignments.create(activeDept.slug, data);
     if (res.assignment) {
-      setAssignments((prev) => [res.assignment, ...prev]);
+      setAssignments((prev) =>
+        prev.some((a) => a.id === res.assignment.id) ? prev : [res.assignment, ...prev]
+      );
     }
     api.announcements.list(activeDept.slug).then((r) => setAnnouncements(r.announcements || []));
   };
@@ -351,7 +369,9 @@ export const App: React.FC = () => {
     if (!activeDept) return;
     const res = await api.announcements.create(activeDept.slug, data);
     if (res.announcement) {
-      setAnnouncements((prev) => [res.announcement, ...prev]);
+      setAnnouncements((prev) =>
+        prev.some((a) => a.id === res.announcement.id) ? prev : [res.announcement, ...prev]
+      );
     }
   };
 
