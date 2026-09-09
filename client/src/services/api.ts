@@ -81,6 +81,8 @@ class ApiClient {
       this.request<any>(`/departments/${slug}/announcements`, { method: 'POST', body: JSON.stringify(data) }),
     delete: (slug: string, id: string) =>
       this.request<any>(`/departments/${slug}/announcements/${id}`, { method: 'DELETE' }),
+    clear: (slug: string) =>
+      this.request<any>(`/departments/${slug}/announcements`, { method: 'DELETE' }),
   };
 
   // Class Schedules

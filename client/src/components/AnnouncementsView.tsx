@@ -20,6 +20,7 @@ interface AnnouncementsViewProps {
   isTutorOrAdmin: boolean;
   onOpenCreateModal: () => void;
   onDeleteAnnouncement: (id: string) => void;
+  onClearAnnouncements: () => void;
   onNavigate: (tab: ActiveTab, targetId?: string) => void;
 }
 
@@ -29,6 +30,7 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({
   isTutorOrAdmin,
   onOpenCreateModal,
   onDeleteAnnouncement,
+  onClearAnnouncements,
   onNavigate,
 }) => {
   const getSourceIcon = (sourceType?: string | null) => {
@@ -68,12 +70,25 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({
           </p>
         </div>
 
-        {isTutorOrAdmin && (
-          <button className="btn-primary" onClick={onOpenCreateModal}>
-            <Plus size={16} />
-            <span>Post Announcement</span>
-          </button>
-        )}
+        <div className="view-header-actions">
+          {announcements.length > 0 && (
+            <button
+              className="btn-secondary btn-sm"
+              onClick={onClearAnnouncements}
+              title="Clear all announcements in this tab"
+            >
+              <Trash2 size={14} />
+              <span>Clear Tab</span>
+            </button>
+          )}
+
+          {isTutorOrAdmin && (
+            <button className="btn-primary" onClick={onOpenCreateModal}>
+              <Plus size={16} />
+              <span>Post Announcement</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {announcements.length === 0 ? (
@@ -152,15 +167,13 @@ export const AnnouncementsView: React.FC<AnnouncementsViewProps> = ({
                       <span>{new Date(ann.createdAt).toLocaleDateString()}</span>
                     </span>
 
-                    {isTutorOrAdmin && (
-                      <button
-                        className="btn-icon-danger-sm"
-                        onClick={() => onDeleteAnnouncement(ann.id)}
-                        title="Delete Announcement"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                    <button
+                      className="btn-icon-danger-sm"
+                      onClick={() => onDeleteAnnouncement(ann.id)}
+                      title="Delete Announcement"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
 

@@ -63,16 +63,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  // Announcements tab is only shown for Tutors and Admin in the sidebar
-  // (for interns/students, it's the Bell Icon in the top bar)
-  if (isTutorOrAdmin) {
-    navItems.push({
-      id: 'announcements' as ActiveTab,
-      label: 'Announcements',
-      icon: Megaphone,
-      description: 'Broadcast updates',
-    });
-  }
+  // Announcements tab is available for everyone
+  navItems.push({
+    id: 'announcements' as ActiveTab,
+    label: 'Announcements',
+    icon: Megaphone,
+    description: isTutorOrAdmin ? 'Broadcast updates' : 'Department updates',
+  });
 
   // Chat is available for all
   navItems.push({

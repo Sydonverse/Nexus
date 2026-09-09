@@ -218,6 +218,12 @@ export const App: React.FC = () => {
       setAnnouncements((prev) => prev.filter((a) => a.id !== data.id));
     });
 
+    const unsubAnnClr = socketService.onAnnouncementCleared((data) => {
+      if (data.departmentSlug === activeDept.slug) {
+        setAnnouncements([]);
+      }
+    });
+
     const unsubSchedNew = socketService.onNewSchedule((sched) => {
       setSchedules((prev) => (prev.some((s) => s.id === sched.id) ? prev : [...prev, sched]));
       fetchNotifications();
@@ -260,6 +266,7 @@ export const App: React.FC = () => {
       unsubStopTyping();
       unsubAnnNew();
       unsubAnnDel();
+      unsubAnnClr();
       unsubSchedNew();
       unsubSchedUpd();
       unsubSchedDel();
@@ -379,6 +386,16 @@ export const App: React.FC = () => {
     if (!activeDept || !confirm('Are you sure you want to delete this announcement?')) return;
     await api.announcements.delete(activeDept.slug, id);
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleClearAnnouncements = async () => {
+    if (!activeDept || !confirm('Are you sure you want to clear all announcements from this tab?')) return;
+    try {
+      await api.announcements.clear(activeDept.slug);
+      setAnnouncements([]);
+    } catch (err: any) {
+      alert(err.message || 'Failed to clear announcements');
+    }
   };
 
   const handleMarkNotificationRead = async (id: string) => {
@@ -567,13 +584,14 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {activeTab === 'announcements' && isTutorOrAdmin && (
+              {activeTab === 'announcements' && (
                 <AnnouncementsView
                   announcements={announcements}
                   activeDept={activeDept}
                   isTutorOrAdmin={isTutorOrAdmin}
                   onOpenCreateModal={() => setShowCreateAnnouncementModal(true)}
                   onDeleteAnnouncement={handleDeleteAnnouncement}
+                  onClearAnnouncements={handleClearAnnouncements}
                   onNavigate={handleNavigate}
                 />
               )}

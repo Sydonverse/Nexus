@@ -143,11 +143,6 @@ export const deleteAnnouncement = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    if (user.role !== 'TUTOR' && user.role !== 'ADMIN') {
-      res.status(403).json({ error: 'Forbidden: Only tutors and administrators can delete announcements' });
-      return;
-    }
-
     const announcement = await prisma.announcement.findUnique({
       where: { id },
       include: { department: { select: { slug: true } } },
@@ -155,11 +150,6 @@ export const deleteAnnouncement = async (req: AuthRequest, res: Response): Promi
 
     if (!announcement) {
       res.status(404).json({ error: 'Announcement not found' });
-      return;
-    }
-
-    if (user.role !== 'ADMIN' && announcement.authorId !== user.id) {
-      res.status(403).json({ error: 'Forbidden: You can only delete your own announcements' });
       return;
     }
 
@@ -178,5 +168,44 @@ export const deleteAnnouncement = async (req: AuthRequest, res: Response): Promi
   } catch (error) {
     console.error('Delete announcement error:', error);
     res.status(500).json({ error: 'Failed to delete announcement' });
+  }
+};
+
+export const clearDepartmentAnnouncements = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { slug } = req.params;
+    const user = req.user;
+
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const dept = await prisma.department.findUnique({
+      where: { slug },
+      select: { id: true, slug: true },
+    });
+
+    if (!dept) {
+      res.status(404).json({ error: 'Department not found' });
+      return;
+    }
+
+    await prisma.announcement.deleteMany({
+      where: {
+        OR: [{ departmentId: dept.id }, { departmentId: null }],
+      },
+    });
+
+    const io = getIO();
+    if (io) {
+      io.to(`dept:${dept.slug}`).emit('announcement:cleared', { departmentSlug: dept.slug });
+      io.emit('announcement:cleared', { departmentSlug: dept.slug });
+    }
+
+    res.json({ message: 'All announcements cleared successfully' });
+  } catch (error) {
+    console.error('Clear announcements error:', error);
+    res.status(500).json({ error: 'Failed to clear announcements' });
   }
 };
