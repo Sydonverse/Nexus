@@ -14,7 +14,16 @@
     "prisma:seed": "npm --prefix server run prisma:seed",
     "prisma:studio": "npx --prefix server prisma studio"
   },
-  "keywords": ["nexus", "tech-hub", "pwa", "hackathon", "project-management"],
+  "keywords": [
+    "nexus",
+    "tech-hub",
+    "pwa",
+    "hackathon",
+    "project-management"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
 }
